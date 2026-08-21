@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - OTP Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #1F2937;
+            --bg-light: #F3F4F6;
+            --primary: #1B8C3D;
+            --primary-hover: #146c2f;
+            --text-main: #111827;
+            --text-muted: #6B7280;
+            --border: #E5E7EB;
+            --white: #FFFFFF;
+            --danger: #EF4444;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --info: #3B82F6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            display: flex;
+            background-color: var(--bg-light);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background-color: var(--bg-dark);
+            color: var(--white);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-menu {
+            flex: 1;
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .nav-item {
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #D1D5DB;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--white);
+            border-left: 4px solid var(--primary);
+        }
+
+        .logout-btn {
+            padding: 15px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #D1D5DB;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logout-btn:hover {
+            color: var(--white);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .header {
+            background-color: var(--white);
+            padding: 15px 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .mobile-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .content-area {
+            padding: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Pages */
+        .page {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Cards */
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--white);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            background: rgba(27, 140, 61, 0.1);
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .stat-info h3 {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .stat-info p {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-top: 4px;
+        }
+
+        /* Panels/Cards */
+        .panel {
+            background: var(--white);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .panel-body {
+            padding: 20px;
+        }
+
+        /* Tables */
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background-color: #F9FAFB;
+            font-weight: 500;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+        }
+
+        td {
+            font-size: 0.875rem;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: #F9FAFB;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 4px 8px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge-success { background: #D1FAE5; color: #065F46; }
+        .badge-warning { background: #FEF3C7; color: #92400E; }
+        .badge-danger { background: #FEE2E2; color: #991B1B; }
+        .badge-info { background: #DBEAFE; color: #1E40AF; }
+
+        /* Forms & Buttons */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(27, 140, 61, 0.1);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            gap: 8px;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--bg-light); color: var(--text-main); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--border); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #DC2626; }
+        
+        .btn-sm { padding: 4px 8px; font-size: 0.75rem; }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            cursor: pointer;
+            color: var(--text-muted);
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        /* Toasts */
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            padding: 12px 20px;
+            border-radius: 6px;
+            color: white;
+            font-size: 0.875rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+            opacity: 1;
+        }
+
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        .toast.info { background: var(--info); }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; display: none; }
+        }
+
+        /* Utilities */
+        .flex { display: flex; }
+        .gap-2 { gap: 8px; }
+        .gap-4 { gap: 16px; }
+        .mt-4 { margin-top: 16px; }
+        .copy-box { background: var(--bg-light); padding: 10px; border-radius: 6px; font-family: monospace; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border);}
+        
+        .code-block {
+            background: #111827;
+            color: #10B981;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { 
+                width: 100%; 
+                height: auto; 
+                flex-direction: row; 
+                overflow-x: auto;
+                position: fixed;
+                bottom: 0;
+                z-index: 50;
+            }
+            .sidebar-header { display: none; }
+            .nav-menu { flex-direction: row; padding: 0; }
+            .nav-item { padding: 15px; justify-content: center; flex: 1; }
+            .nav-item span { display: none; }
+            .logout-btn { padding: 15px; border-top: none; border-left: 1px solid rgba(255,255,255,0.1); }
+            .logout-btn span { display: none; }
+            .main-content { margin-bottom: 60px; height: calc(100vh - 60px); }
+            .mobile-toggle { display: block; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            ⚡ Admin Panel
+        </div>
+        <nav class="nav-menu">
+            <a href="#dashboard" class="nav-item active" data-page="dashboard">
+                <span>📊</span> <span>Dashboard</span>
+            </a>
+            <a href="#users" class="nav-item" data-page="users">
+                <span>👥</span> <span>Users</span>
+            </a>
+            <a href="#finance" class="nav-item" data-page="finance">
+                <span>💰</span> <span>Finance</span>
+            </a>
+            <a href="#orders" class="nav-item" data-page="orders">
+                <span>📦</span> <span>Orders</span>
+            </a>
+            <a href="#sms" class="nav-item" data-page="sms">
+                <span>💬</span> <span>SMS Monitor</span>
+            </a>
+            <a href="#sims" class="nav-item" data-page="sims">
+                <span>📱</span> <span>SIM Cards</span>
+            </a>
+            <a href="#settings" class="nav-item" data-page="settings">
+                <span>⚙️</span> <span>Settings</span>
+            </a>
+        </nav>
+        <div class="logout-btn" id="logoutBtn">
+            <span>🚪</span> <span>Logout</span>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="header">
+            <button class="mobile-toggle">☰</button>
+            <h2 id="pageTitle">Dashboard</h2>
+            <div class="admin-profile flex gap-2" style="align-items: center;">
+                <span style="font-size: 1.5rem;">👨‍💻</span>
+                <span style="font-weight: 500;">Admin</span>
+            </div>
+        </header>
+
+        <div class="content-area">
+            
+            <!-- Dashboard Page -->
+            <div id="page-dashboard" class="page active">
+                <div class="grid-4" id="statsGrid">
+                    <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-info"><h3>Total Users</h3><p id="stat-users">0</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">📱</div><div class="stat-info"><h3>Active SIMs</h3><p id="stat-sims">0</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-info"><h3>Total Orders</h3><p id="stat-orders">0</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-info"><h3>Total Revenue</h3><p id="stat-revenue">$0.00</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-info"><h3>Pending Orders</h3><p id="stat-pending">0</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-info"><h3>Completed Orders</h3><p id="stat-completed">0</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">💬</div><div class="stat-info"><h3>Today's SMS</h3><p id="stat-sms-today">0</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">📈</div><div class="stat-info"><h3>Total Sales</h3><p id="stat-sales">$0.00</p></div></div>
+                </div>
+            </div>
+
+            <!-- Users Page -->
+            <div id="page-users" class="page">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Manage Users</h2>
+                    </div>
+                    <div class="panel-body table-responsive">
+                        <table id="usersTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Balance</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="7" style="text-align: center;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Finance Page -->
+            <div id="page-finance" class="page">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Profit Settings</h2>
+                    </div>
+                    <div class="panel-body">
+                        <div class="flex gap-4" style="align-items: flex-end;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">Global Profit Percentage (%)</label>
+                                <input type="number" id="profitPercentage" class="form-control" value="0">
+                            </div>
+                            <button class="btn btn-primary" id="saveProfitBtn">Save</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Recent Transactions</h2>
+                    </div>
+                    <div class="panel-body table-responsive">
+                        <table id="transactionsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>User</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Balance After</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="6" style="text-align: center;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Orders Page -->
+            <div id="page-orders" class="page">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>All Orders</h2>
+                    </div>
+                    <div class="panel-body table-responsive">
+                        <table id="ordersTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>User</th>
+                                    <th>Service</th>
+                                    <th>Country</th>
+                                    <th>Number</th>
+                                    <th>Cost</th>
+                                    <th>Price</th>
+                                    <th>Profit</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="9" style="text-align: center;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SMS Monitor Page -->
+            <div id="page-sms" class="page">
+                <div class="grid-4" style="grid-template-columns: 1fr 2fr;">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h2>Send Test SMS</h2>
+                        </div>
+                        <div class="panel-body">
+                            <form id="testSmsForm">
+                                <div class="form-group">
+                                    <label class="form-label">Sender Name</label>
+                                    <input type="text" id="smsSender" class="form-control" placeholder="e.g. Google">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">SMS Text</label>
+                                    <textarea id="smsText" class="form-control" rows="3" placeholder="G-123456 is your verification code."></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="width: 100%;">Send Test</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h2>Live SMS Feed</h2>
+                        </div>
+                        <div class="panel-body">
+                            <div class="code-block" id="smsFeed">
+                                <!-- Live feed here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>SMS History</h2>
+                    </div>
+                    <div class="panel-body table-responsive">
+                        <table id="smsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Sender</th>
+                                    <th>Recipient</th>
+                                    <th>Text</th>
+                                    <th>Push Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="5" style="text-align: center;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SIM Cards Page -->
+            <div id="page-sims" class="page">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Connected SIM Cards</h2>
+                    </div>
+                    <div class="panel-body table-responsive">
+                        <table id="simsTable">
+                            <thead>
+                                <tr>
+                                    <th>Phone Number</th>
+                                    <th>ICCID</th>
+                                    <th>Carrier</th>
+                                    <th>Status</th>
+                                    <th>Active</th>
+                                    <th>Last Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="6" style="text-align: center;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="page-settings" class="page">
+                <div class="grid-4" style="grid-template-columns: 1fr 1fr;">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h2>Platform Settings</h2>
+                        </div>
+                        <div class="panel-body">
+                            <form id="settingsForm">
+                                <div class="form-group">
+                                    <label class="form-label">Profit Percentage (%)</label>
+                                    <input type="number" id="setProfit" name="profitPercentage" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Min Order Amount ($)</label>
+                                    <input type="number" id="setMinOrder" name="minOrderAmount" step="0.01" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Site Name</label>
+                                    <input type="text" id="setSiteName" name="siteName" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Site Description</label>
+                                    <input type="text" id="setSiteDesc" name="siteDescription" class="form-control">
+                                </div>
+                                <div class="form-group flex gap-2" style="align-items: center;">
+                                    <input type="checkbox" id="setMaintenance" name="maintenanceMode">
+                                    <label for="setMaintenance" class="form-label" style="margin: 0;">Maintenance Mode</label>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Save Settings</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h2>Integration Details</h2>
+                        </div>
+                        <div class="panel-body">
+                            <div class="form-group">
+                                <label class="form-label">Android App Webhook URL</label>
+                                <div class="copy-box">
+                                    <span id="webhookUrl">https://yourdomain.com/api/webhook/sms</span>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="copyToClipboard('webhookUrl')">Copy</button>
+                                </div>
+                            </div>
+                            <div class="form-group mt-4">
+                                <label class="form-label">Partner API URL (5sim compatible)</label>
+                                <div class="copy-box">
+                                    <span id="apiUrl">https://yourdomain.com/api/v1</span>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="copyToClipboard('apiUrl')">Copy</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Adjust Balance Modal -->
+    <div class="modal-overlay" id="balanceModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Adjust Balance</h3>
+                <button class="modal-close" onclick="closeModal('balanceModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="balanceForm" onsubmit="event.preventDefault(); submitBalance();">
+                    <input type="hidden" id="balanceUserId">
+                    <div class="form-group">
+                        <label class="form-label">Amount (use negative to deduct)</label>
+                        <input type="number" id="balanceAmount" step="0.01" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description / Reason</label>
+                        <input type="text" id="balanceDesc" class="form-control" required placeholder="e.g. Refund or Admin Add">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('balanceModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitBalance()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- JavaScript -->
+    <script>
+        // Check Authentication
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/index.html';
+        }
+
+        // State
+        let currentPage = 'dashboard';
+        const apiBase = '/admin/';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Setup routing
+            handleHashChange();
+            window.addEventListener('hashchange', handleHashChange);
+            
+            // Setup Sidebar clicks
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    const page = item.getAttribute('data-page');
+                    window.location.hash = page;
+                });
+            });
+
+            // Logout
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                localStorage.removeItem('token');
+                window.location.href = '/index.html';
+            });
+
+            // Load initial data for first page
+            loadDataForPage(currentPage);
+
+            // Auto refresh dashboard every 30s
+            setInterval(() => {
+                if (currentPage === 'dashboard') loadDashboard();
+            }, 30000);
+            
+            // Event Listeners for Forms
+            document.getElementById('saveProfitBtn').addEventListener('click', () => {
+                saveSetting('profitPercentage', document.getElementById('profitPercentage').value);
+            });
+            
+            document.getElementById('testSmsForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                sendTestSms();
+            });
+
+            document.getElementById('settingsForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveAllSettings();
+            });
+
+            // Populate URLs
+            const host = window.location.origin;
+            document.getElementById('webhookUrl').innerText = `${host}/api/webhook/sms`;
+            document.getElementById('apiUrl').innerText = `${host}/api/v1`;
+        });
+
+        // Routing
+        function handleHashChange() {
+            const hash = window.location.hash.replace('#', '') || 'dashboard';
+            
+            // Update active state in nav
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.getAttribute('data-page') === hash) {
+                    item.classList.add('active');
+                    document.getElementById('pageTitle').innerText = item.querySelector('span:nth-child(2)').innerText;
+                }
+            });
+
+            // Show page
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            const targetPage = document.getElementById(`page-${hash}`);
+            if (targetPage) {
+                targetPage.classList.add('active');
+                currentPage = hash;
+                loadDataForPage(hash);
+            }
+        }
+
+        function loadDataForPage(page) {
+            switch(page) {
+                case 'dashboard': loadDashboard(); break;
+                case 'users': loadUsers(); break;
+                case 'finance': loadFinance(); break;
+                case 'orders': loadOrders(); break;
+                case 'sms': loadSms(); break;
+                case 'sims': loadSims(); break;
+                case 'settings': loadSettings(); break;
+            }
+        }
+
+        // Fetch Wrapper
+        async function apiFetch(endpoint, options = {}) {
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+            
+            if (options.headers) {
+                Object.assign(headers, options.headers);
+            }
+
+            try {
+                const response = await fetch(apiBase + endpoint.replace(/^\//, ''), {
+                    ...options,
+                    headers
+                });
+                
+                if (response.status === 401 || response.status === 403) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/index.html';
+                    return null;
+                }
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || data.message || 'API Error');
+                }
+                
+                return data;
+            } catch (error) {
+                showToast(error.message, 'error');
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+
+        // Formatters
+        const formatMoney = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+        const formatDate = (dateString) => new Date(dateString).toLocaleString();
+        
+        function statusBadge(status) {
+            let type = 'info';
+            switch(status.toLowerCase()) {
+                case 'completed': case 'active': case 'sent': type = 'success'; break;
+                case 'pending': case 'waiting': type = 'warning'; break;
+                case 'canceled': case 'banned': case 'failed': type = 'danger'; break;
+            }
+            return `<span class="badge badge-${type}">${status}</span>`;
+        }
+
+        // --- Dashboard ---
+        async function loadDashboard() {
+            try {
+                const stats = await apiFetch('stats');
+                document.getElementById('stat-users').innerText = stats.totalUsers || 0;
+                document.getElementById('stat-sims').innerText = stats.activeSims || 0;
+                document.getElementById('stat-orders').innerText = stats.totalOrders || 0;
+                document.getElementById('stat-revenue').innerText = formatMoney(stats.totalRevenue || 0);
+                document.getElementById('stat-pending').innerText = stats.pendingOrders || 0;
+                document.getElementById('stat-completed').innerText = stats.completedOrders || 0;
+                document.getElementById('stat-sms-today').innerText = stats.smsToday || 0;
+                document.getElementById('stat-sales').innerText = formatMoney(stats.totalSales || 0);
+            } catch (e) {
+                console.error("Dashboard load error", e);
+            }
+        }
+
+        // --- Users ---
+        async function loadUsers() {
+            const tbody = document.querySelector('#usersTable tbody');
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Loading...</td></tr>';
+            
+            try {
+                const data = await apiFetch('users');
+                const users = data.users || data;
+                
+                if (!users || users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No users found.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = users.map(user => `
+                    <tr>
+                        <td>#${user.id || user._id}</td>
+                        <td>${user.email}</td>
+                        <td>${user.role === 'admin' ? '<span class="badge badge-info">Admin</span>' : 'User'}</td>
+                        <td>${formatMoney(user.balance || 0)}</td>
+                        <td>${statusBadge(user.status || 'active')}</td>
+                        <td>${formatDate(user.createdAt)}</td>
+                        <td>
+                            <div class="flex gap-2">
+                                <button class="btn btn-sm btn-primary" onclick="openBalanceModal('${user.id || user._id}')">Balance</button>
+                                <button class="btn btn-sm ${user.status === 'banned' ? 'btn-success' : 'btn-danger'}" 
+                                    onclick="toggleUserStatus('${user.id || user._id}', '${user.status}')">
+                                    ${user.status === 'banned' ? 'Unban' : 'Ban'}
+                                </button>
+                                ${user.role !== 'admin' ? 
+                                    `<button class="btn btn-sm btn-secondary" onclick="makeAdmin('${user.id || user._id}')">Make Admin</button>` : ''
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Error loading users.</td></tr>';
+            }
+        }
+
+        async function toggleUserStatus(id, currentStatus) {
+            const newStatus = currentStatus === 'banned' ? 'active' : 'banned';
+            try {
+                await apiFetch(`users/${id}/status`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ status: newStatus })
+                });
+                showToast(`User status updated to ${newStatus}`, 'success');
+                loadUsers();
+            } catch (e) { }
+        }
+
+        async function makeAdmin(id) {
+            if(!confirm("Are you sure you want to make this user an Admin?")) return;
+            try {
+                await apiFetch(`users/${id}/role`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ role: 'admin' })
+                });
+                showToast('User promoted to Admin', 'success');
+                loadUsers();
+            } catch (e) { }
+        }
+
+        // --- Balance Modal ---
+        function openBalanceModal(userId) {
+            document.getElementById('balanceUserId').value = userId;
+            document.getElementById('balanceAmount').value = '';
+            document.getElementById('balanceDesc').value = '';
+            document.getElementById('balanceModal').style.display = 'flex';
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        async function submitBalance() {
+            const id = document.getElementById('balanceUserId').value;
+            const amount = parseFloat(document.getElementById('balanceAmount').value);
+            const description = document.getElementById('balanceDesc').value;
+
+            if (isNaN(amount) || !description) {
+                showToast('Please enter valid amount and description', 'error');
+                return;
+            }
+
+            try {
+                await apiFetch(`users/${id}/balance`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ amount, description })
+                });
+                showToast('Balance updated successfully', 'success');
+                closeModal('balanceModal');
+                loadUsers();
+            } catch (e) { }
+        }
+
+        // --- Finance ---
+        async function loadFinance() {
+            const tbody = document.querySelector('#transactionsTable tbody');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Loading...</td></tr>';
+            
+            try {
+                // Load settings for profit
+                const settings = await apiFetch('settings');
+                document.getElementById('profitPercentage').value = settings.profitPercentage || 0;
+
+                // Load transactions
+                const data = await apiFetch('transactions');
+                const transactions = data.transactions || data;
+                
+                if (!transactions || transactions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No transactions found.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = transactions.map(t => `
+                    <tr>
+                        <td>${formatDate(t.createdAt)}</td>
+                        <td>${t.userId ? t.userId.email || t.userId : 'System'}</td>
+                        <td>${t.type === 'credit' ? '<span class="badge badge-success">Credit</span>' : '<span class="badge badge-danger">Debit</span>'}</td>
+                        <td style="color: ${t.type === 'credit' ? 'var(--success)' : 'var(--danger)'}">
+                            ${t.type === 'credit' ? '+' : '-'}${formatMoney(t.amount)}
+                        </td>
+                        <td>${formatMoney(t.balanceAfter || 0)}</td>
+                        <td>${t.description}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error loading transactions.</td></tr>';
+            }
+        }
+
+        async function saveSetting(key, value) {
+            try {
+                await apiFetch('settings', {
+                    method: 'POST',
+                    body: JSON.stringify({ [key]: value })
+                });
+                showToast('Setting saved successfully', 'success');
+            } catch (e) { }
+        }
+
+        // --- Orders ---
+        async function loadOrders() {
+            const tbody = document.querySelector('#ordersTable tbody');
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">Loading...</td></tr>';
+            
+            try {
+                const data = await apiFetch('orders');
+                const orders = data.orders || data;
+                
+                if (!orders || orders.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No orders found.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = orders.map(o => `
+                    <tr>
+                        <td>${formatDate(o.createdAt)}</td>
+                        <td>${o.userId ? o.userId.email || o.userId : 'Unknown'}</td>
+                        <td>${o.service}</td>
+                        <td>${o.country}</td>
+                        <td>${o.phone || '-'}</td>
+                        <td>${formatMoney(o.cost || 0)}</td>
+                        <td>${formatMoney(o.price || 0)}</td>
+                        <td><span style="color: var(--success)">${formatMoney((o.price || 0) - (o.cost || 0))}</span></td>
+                        <td>${statusBadge(o.status)}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: red;">Error loading orders.</td></tr>';
+            }
+        }
+
+        // --- SMS ---
+        async function loadSms() {
+            const tbody = document.querySelector('#smsTable tbody');
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Loading...</td></tr>';
+            
+            try {
+                const data = await apiFetch('sms');
+                const sms = data.sms || data;
+                
+                const feed = document.getElementById('smsFeed');
+                
+                if (!sms || sms.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No SMS found.</td></tr>';
+                    feed.innerHTML = '> No recent SMS activity.';
+                    return;
+                }
+
+                // Update Feed (last 50)
+                feed.innerHTML = sms.slice(0, 50).map(s => 
+                    `> [${new Date(s.createdAt).toLocaleTimeString()}] ${s.sender} -> ${s.recipient}: ${s.text}`
+                ).join('<br>');
+
+                // Update Table
+                tbody.innerHTML = sms.map(s => `
+                    <tr>
+                        <td>${formatDate(s.createdAt)}</td>
+                        <td>${s.sender}</td>
+                        <td>${s.recipient || s.phone}</td>
+                        <td>${s.text}</td>
+                        <td>${statusBadge(s.status || 'sent')}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Error loading SMS.</td></tr>';
+            }
+        }
+
+        async function sendTestSms() {
+            const sender = document.getElementById('smsSender').value;
+            const text = document.getElementById('smsText').value;
+
+            if(!sender || !text) {
+                showToast('Sender and Text are required', 'error');
+                return;
+            }
+
+            try {
+                await apiFetch('test-sms', {
+                    method: 'POST',
+                    body: JSON.stringify({ sender, text })
+                });
+                showToast('Test SMS Sent!', 'success');
+                document.getElementById('testSmsForm').reset();
+                loadSms(); // reload feed
+            } catch (e) { }
+        }
+
+        // --- SIM Cards ---
+        async function loadSims() {
+            const tbody = document.querySelector('#simsTable tbody');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Loading...</td></tr>';
+            
+            try {
+                const data = await apiFetch('sims');
+                const sims = data.sims || data;
+                
+                if (!sims || sims.length === 0) {
+                    tbody.innerHTML = `
+                        <tr><td colspan="6" style="text-align: center; padding: 40px;">
+                            <div style="font-size: 2rem; margin-bottom: 10px;">📱</div>
+                            <h3>No SIM Cards Connected</h3>
+                            <p style="color: var(--text-muted); margin-top: 10px;">Connect the Android App via Webhook to sync SIM cards automatically.</p>
+                        </td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = sims.map(sim => `
+                    <tr>
+                        <td>${sim.phone}</td>
+                        <td>${sim.iccid || '-'}</td>
+                        <td>${sim.carrier || '-'}</td>
+                        <td>${statusBadge(sim.status || 'active')}</td>
+                        <td>${sim.isActive ? '✅ Yes' : '❌ No'}</td>
+                        <td>${formatDate(sim.updatedAt || sim.createdAt)}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error loading SIMs.</td></tr>';
+            }
+        }
+
+        // --- Settings ---
+        async function loadSettings() {
+            try {
+                const settings = await apiFetch('settings');
+                if(settings) {
+                    document.getElementById('setProfit').value = settings.profitPercentage || '';
+                    document.getElementById('setMinOrder').value = settings.minOrderAmount || '';
+                    document.getElementById('setSiteName').value = settings.siteName || '';
+                    document.getElementById('setSiteDesc').value = settings.siteDescription || '';
+                    document.getElementById('setMaintenance').checked = settings.maintenanceMode || false;
+                }
+            } catch (e) { }
+        }
+
+        async function saveAllSettings() {
+            const settings = {
+                profitPercentage: parseFloat(document.getElementById('setProfit').value) || 0,
+                minOrderAmount: parseFloat(document.getElementById('setMinOrder').value) || 0,
+                siteName: document.getElementById('setSiteName').value,
+                siteDescription: document.getElementById('setSiteDesc').value,
+                maintenanceMode: document.getElementById('setMaintenance').checked
+            };
+
+            try {
+                await apiFetch('settings', {
+                    method: 'POST',
+                    body: JSON.stringify(settings)
+                });
+                showToast('All settings saved successfully', 'success');
+            } catch (e) { }
+        }
+
+        // --- Helpers ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                if(toast.parentElement) container.removeChild(toast);
+            }, 3000);
+        }
+
+        function copyToClipboard(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Copied to clipboard!', 'success');
+            });
+        }
+    </script>
+</body>
+</html>
