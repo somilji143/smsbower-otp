@@ -1,9 +1,25 @@
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
+// Railway may use different variable names for the PG connection string
+const DATABASE_URL = process.env.DATABASE_URL
+  || process.env.DATABASE_PRIVATE_URL
+  || process.env.DATABASE_PUBLIC_URL
+  || process.env.POSTGRES_URL
+  || process.env.PGHOST && `postgresql://${process.env.PGUSER || 'postgres'}:${process.env.PGPASSWORD || ''}@${process.env.PGHOST}:${process.env.PGPORT || 5432}/${process.env.PGDATABASE || 'railway'}`;
+
+if (!DATABASE_URL) {
+  console.error('[DB] ERROR: No DATABASE_URL found. Set DATABASE_URL environment variable.');
+  console.error('[DB] On Railway: Add a PostgreSQL service and link it to your web service.');
+  console.error('[DB] The variable will be auto-injected after linking.');
+  process.exit(1);
+}
+
+const isSSL = !DATABASE_URL.includes('localhost') && !DATABASE_URL.includes('127.0.0.1');
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('railway') ? { rejectUnauthorized: false } : false,
+  connectionString: DATABASE_URL,
+  ssl: isSSL ? { rejectUnauthorized: false } : false,
 });
 
 let ready = false;
