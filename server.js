@@ -18,14 +18,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Routes
 app.use('/auth', authRouter);
 app.use('/', webhookRouter);
 app.use('/partner', partnerRouter);
 app.use('/api', apiRouter);
 app.use('/admin', adminRouter);
 
-// SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -38,7 +36,7 @@ app.use((err, req, res, next) => {
 db.waitForReady().then(() => {
   app.listen(PORT, () => {
     console.log('');
-    console.log('  ⚡ SmsBower OTP Platform');
+    console.log('  ⚡ SMSMaster Platform');
     console.log(`  🌐 App:     http://localhost:${PORT}`);
     console.log(`  👑 Admin:   http://localhost:${PORT}/admin.html`);
     console.log(`  📡 Webhook: http://localhost:${PORT}/api/{apiKey}/webhook`);

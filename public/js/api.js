@@ -1,5 +1,5 @@
 /* ============================================================
-   SmsBower OTP — Frontend API Client
+   SMSMaster — Frontend API Client
    Real API calls only — no mock data
    ============================================================ */
 const API = {

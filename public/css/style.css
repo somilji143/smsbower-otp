@@ -1,6 +1,5 @@
 /* ============================================================
-   SmsBower OTP — Complete Responsive Stylesheet
-   Green theme matching SmsBower's design language
+   SMSMaster — Complete Responsive Stylesheet
    ============================================================ */
 
 /* Color Palette */
@@ -1054,3 +1053,66 @@ tr:hover td { background: var(--gray-50); }
   .main-content { padding: 0; }
   .page { display: block !important; }
 }
+
+/* ============================================================
+   AUTH OVERLAY
+   ============================================================ */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+.auth-card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 32px 28px;
+  width: 100%;
+  max-width: 400px;
+  animation: fadeIn 0.3s ease;
+}
+.auth-logo {
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.auth-logo span { color: var(--primary); }
+.auth-subtitle {
+  text-align: center;
+  color: var(--gray-500);
+  font-size: 0.875rem;
+  margin-bottom: 20px;
+}
+.auth-error {
+  color: var(--danger);
+  font-size: 0.8125rem;
+  text-align: center;
+  min-height: 20px;
+  margin-bottom: 8px;
+}
+.auth-hint {
+  text-align: center;
+  color: var(--primary);
+  font-size: 0.8125rem;
+  margin-top: 16px;
+  cursor: pointer;
+}
+.auth-hint:hover { text-decoration: underline; }
+
+/* User Balance Pill */
+.user-balance {
+  background: var(--primary-bg);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+

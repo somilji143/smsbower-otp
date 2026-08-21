@@ -1,439 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmsBower OTP</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SMSMaster — Virtual Numbers for SMS Verification</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-    <!-- Auth View -->
-    <div id="auth-view" class="auth-container">
-        <div class="card auth-card">
-            <div class="auth-logo">⚡ SmsBower OTP</div>
-            <div id="auth-error" class="error-message"></div>
-            <form id="auth-form">
-                <div class="form-group">
-                    <label for="auth-email">Email</label>
-                    <input type="email" id="auth-email" class="form-input" required>
-                </div>
-                <div class="form-group">
-                    <label for="auth-password">Password</label>
-                    <input type="password" id="auth-password" class="form-input" required>
-                </div>
-                <div class="auth-actions">
-                    <button type="button" id="btn-login" class="btn btn-primary">Login</button>
-                    <button type="button" id="btn-register" class="btn">Register</button>
-                </div>
-            </form>
+<!-- ════════════════════════════════════════════ AUTH VIEW ════════════════════════════════════════════ -->
+<div id="auth-view" class="auth-overlay" style="display:none">
+  <div class="auth-card">
+    <div class="auth-logo">⚡ <span>SMS</span>Master</div>
+    <p class="auth-subtitle">Virtual Numbers for SMS Verification</p>
+    <div id="authError" class="auth-error"></div>
+    <div class="form-group"><label>Email</label><input type="email" id="authEmail" class="search-input" placeholder="you@email.com"></div>
+    <div class="form-group"><label>Password</label><input type="password" id="authPassword" class="search-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')App.login()"></div>
+    <button class="btn btn-primary btn-block" onclick="App.login()">Login</button>
+    <button class="btn btn-outline btn-block" onclick="App.register()">Create Account</button>
+    <p class="auth-hint" onclick="document.getElementById('auth-view').style.display='none'">← Browse services without account</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ MAIN APP ════════════════════════════════════════════ -->
+<div id="app">
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a class="navbar-brand" href="#/services"><span class="logo-icon">⚡</span><span class="logo-text"><span>SMS</span>Master</span></a>
+    <div class="navbar-links">
+      <a class="nav-link" data-page="dashboard" href="#/dashboard" onclick="App.requireAuth()"><span class="nav-icon">📊</span> Dashboard</a>
+      <a class="nav-link active" data-page="services" href="#/services"><span class="nav-icon">🔢</span> Get Number</a>
+      <a class="nav-link" data-page="sms" href="#/sms" onclick="App.requireAuth()"><span class="nav-icon">💬</span> SMS Inbox</a>
+      <a class="nav-link" data-page="history" href="#/history" onclick="App.requireAuth()"><span class="nav-icon">📋</span> History</a>
+    </div>
+    <div class="navbar-right">
+      <div class="connection-status"><span class="connection-dot" id="connectionDot"></span><span id="connectionLabel" class="connection-label">Offline</span></div>
+      <span id="userBalance" class="user-balance" style="display:none">$0.00</span>
+      <a id="adminLink" href="/admin.html" style="display:none" class="btn btn-outline" style="padding:4px 10px;font-size:0.75rem">👑 Admin</a>
+      <button id="loginBtn" class="btn btn-primary" onclick="document.getElementById('auth-view').style.display='flex'" style="padding:6px 14px;font-size:0.8125rem">Login</button>
+      <button id="logoutBtn" class="btn btn-outline" onclick="App.logout()" style="display:none;padding:6px 14px;font-size:0.8125rem">Logout</button>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <!-- ══════ DASHBOARD ══════ -->
+    <div id="page-dashboard" class="page">
+      <div class="page-header"><h2>📊 Dashboard</h2><p class="page-subtitle">Your account overview</p></div>
+      <div class="stats-grid">
+        <div class="card stats-card"><div class="stats-icon">💰</div><div class="stats-info"><span class="stats-value" id="dashBalance">$0.00</span><span class="stats-label">Balance</span></div></div>
+        <div class="card stats-card"><div class="stats-icon">📦</div><div class="stats-info"><span class="stats-value" id="dashOrders">0</span><span class="stats-label">Total Orders</span></div></div>
+        <div class="card stats-card"><div class="stats-icon">✅</div><div class="stats-info"><span class="stats-value" id="dashCompleted">0</span><span class="stats-label">Completed</span></div></div>
+        <div class="card stats-card"><div class="stats-icon">💸</div><div class="stats-info"><span class="stats-value" id="dashSpent">$0.00</span><span class="stats-label">Total Spent</span></div></div>
+      </div>
+      <div class="quick-actions">
+        <a href="#/services" class="card quick-action-card"><span class="quick-action-icon">🔢</span><div><strong>Get a Number</strong><p>Buy a virtual number for SMS verification</p></div></a>
+      </div>
+      <div class="card"><div class="card-header"><h3>Recent Orders</h3></div><div id="dashRecentOrders"><div class="empty-state"><div class="empty-state-icon">📋</div><p>No orders yet</p></div></div></div>
+    </div>
+
+    <!-- ══════ GET NUMBER (PUBLIC) ══════ -->
+    <div id="page-services" class="page active">
+      <div class="page-header"><h2>🔢 Get Number</h2><p class="page-subtitle">Select a service and country to receive your OTP</p></div>
+      <div class="services-layout">
+        <div class="services-main">
+          <!-- Step 1: Service -->
+          <div class="card step-card" id="step1">
+            <div class="step-header"><span class="step-number">1</span><h3>Select Service</h3><span class="step-selected" id="step1Selected"></span></div>
+            <div class="search-wrapper"><span class="search-icon">🔍</span><input type="text" class="search-input" id="serviceSearch" placeholder="Search services..." oninput="App.filterServices(this.value)"></div>
+            <div class="service-grid" id="serviceSelectionGrid"></div>
+          </div>
+          <!-- Step 2: Country -->
+          <div class="card step-card step-disabled" id="step2">
+            <div class="step-header"><span class="step-number">2</span><h3>Select Country</h3><span class="step-selected" id="step2Selected"></span></div>
+            <div class="search-wrapper"><span class="search-icon">🔍</span><input type="text" class="search-input" placeholder="Search countries..." oninput="App.filterCountries(this.value)"></div>
+            <div class="country-list" id="countrySelectionList"></div>
+          </div>
         </div>
+        <div class="services-side">
+          <!-- Step 3: Number + OTP -->
+          <div class="card step-card step-disabled" id="step3">
+            <div class="step-header"><span class="step-number">3</span><h3>Your Number</h3></div>
+            <div class="otp-display" id="otpDisplay"><div class="empty-state"><div class="empty-state-icon">📱</div><p>Select service & country to get started</p></div></div>
+            <div id="activationInfo" style="display:none">
+              <div class="activation-details">
+                <div class="detail-row"><span class="detail-label">Service</span><span class="detail-value" id="actService"></span></div>
+                <div class="detail-row"><span class="detail-label">Country</span><span class="detail-value" id="actCountry"></span></div>
+                <div class="detail-row"><span class="detail-label">Auto-refund</span><span class="detail-value" id="actRefund"></span></div>
+              </div>
+              <button class="btn btn-danger btn-block" onclick="App.cancelActivation()">Cancel & Refund</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Main App View -->
-    <div id="app-view" style="display: none;">
-        
-        <!-- Top Navbar -->
-        <nav class="navbar">
-            <div class="navbar-brand">⚡ SmsBower OTP</div>
-            <ul class="nav-links">
-                <li><a href="#" class="nav-link active" data-target="dashboard">Dashboard</a></li>
-                <li><a href="#" class="nav-link" data-target="services">Get Number</a></li>
-                <li><a href="#" class="nav-link" data-target="sms">SMS Inbox</a></li>
-                <li><a href="#" class="nav-link" data-target="history">History</a></li>
-            </ul>
-            <div class="navbar-actions">
-                <div class="balance-pill">
-                    <span>Balance: </span>
-                    <strong id="user-balance">$0.00</strong>
-                </div>
-                <div class="dropdown">
-                    <button class="btn btn-outline dropdown-toggle" id="btn-profile">Profile ▾</button>
-                    <div class="dropdown-menu">
-                        <a href="#" id="link-admin" style="display: none;">Admin Panel</a>
-                        <a href="#" id="btn-logout">Logout</a>
-                    </div>
-                </div>
-            </div>
-        </nav>
-
-        <!-- Pages Container -->
-        <main class="container">
-            
-            <!-- Dashboard Page -->
-            <div id="page-dashboard" class="page active">
-                <h2>Dashboard</h2>
-                <div class="stats-grid">
-                    <div class="stats-card">
-                        <div class="stats-title">Current Balance</div>
-                        <div class="stats-value" id="stat-balance">$0.00</div>
-                    </div>
-                    <div class="stats-card">
-                        <div class="stats-title">Total Orders</div>
-                        <div class="stats-value" id="stat-orders">0</div>
-                    </div>
-                    <div class="stats-card">
-                        <div class="stats-title">Completed</div>
-                        <div class="stats-value" id="stat-completed">0</div>
-                    </div>
-                    <div class="stats-card">
-                        <div class="stats-title">Total Spent</div>
-                        <div class="stats-value" id="stat-spent">$0.00</div>
-                    </div>
-                </div>
-
-                <div class="dashboard-actions">
-                    <div class="card quick-action-card">
-                        <h3>Need a number?</h3>
-                        <p>Get a virtual number for OTP verification instantly.</p>
-                        <button class="btn btn-primary" onclick="document.querySelector('[data-target=\'services\']').click()">Get Number</button>
-                    </div>
-                </div>
-
-                <h3>Recent Orders</h3>
-                <div class="card">
-                    <div class="table-responsive">
-                        <table class="table" id="recent-orders-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Service</th>
-                                    <th>Number</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Empty state or items via JS -->
-                            </tbody>
-                        </table>
-                        <div id="recent-empty-state" class="empty-state">
-                            <p>No recent orders found.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Get Number Page -->
-            <div id="page-services" class="page">
-                <h2>Get Number</h2>
-                
-                <div class="wizard">
-                    <!-- Step 1: Select Service -->
-                    <div id="step-1" class="wizard-step active">
-                        <div class="step-header">
-                            <h3>1. Select Service</h3>
-                            <input type="text" id="search-services" class="search-input" placeholder="Search service...">
-                        </div>
-                        <div class="service-grid">
-                            <div class="service-card" data-service="wa">
-                                <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" class="service-icon" width="32" height="32">
-                                <span>WhatsApp</span>
-                            </div>
-                            <div class="service-card" data-service="tg">
-                                <img src="https://cdn.simpleicons.org/telegram/26A5E4" alt="Telegram" class="service-icon" width="32" height="32">
-                                <span>Telegram</span>
-                            </div>
-                            <div class="service-card" data-service="go">
-                                <img src="https://cdn.simpleicons.org/google/4285F4" alt="Google" class="service-icon" width="32" height="32">
-                                <span>Google</span>
-                            </div>
-                            <div class="service-card" data-service="ig">
-                                <img src="https://cdn.simpleicons.org/instagram/E4405F" alt="Instagram" class="service-icon" width="32" height="32">
-                                <span>Instagram</span>
-                            </div>
-                            <div class="service-card" data-service="fb">
-                                <img src="https://cdn.simpleicons.org/facebook/1877F2" alt="Facebook" class="service-icon" width="32" height="32">
-                                <span>Facebook</span>
-                            </div>
-                            <div class="service-card" data-service="tw">
-                                <img src="https://cdn.simpleicons.org/x/000000" alt="Twitter/X" class="service-icon" width="32" height="32">
-                                <span>Twitter/X</span>
-                            </div>
-                            <div class="service-card" data-service="tt">
-                                <img src="https://cdn.simpleicons.org/tiktok/000000" alt="TikTok" class="service-icon" width="32" height="32">
-                                <span>TikTok</span>
-                            </div>
-                            <div class="service-card" data-service="ds">
-                                <img src="https://cdn.simpleicons.org/discord/5865F2" alt="Discord" class="service-icon" width="32" height="32">
-                                <span>Discord</span>
-                            </div>
-                            <div class="service-card" data-service="ms">
-                                <img src="https://cdn.simpleicons.org/microsoft/5E5E5E" alt="Microsoft" class="service-icon" width="32" height="32">
-                                <span>Microsoft</span>
-                            </div>
-                            <div class="service-card" data-service="am">
-                                <img src="https://cdn.simpleicons.org/amazon/FF9900" alt="Amazon" class="service-icon" width="32" height="32">
-                                <span>Amazon</span>
-                            </div>
-                            <div class="service-card" data-service="nf">
-                                <img src="https://cdn.simpleicons.org/netflix/E50914" alt="Netflix" class="service-icon" width="32" height="32">
-                                <span>Netflix</span>
-                            </div>
-                            <div class="service-card" data-service="ub">
-                                <img src="https://cdn.simpleicons.org/uber/000000" alt="Uber" class="service-icon" width="32" height="32">
-                                <span>Uber</span>
-                            </div>
-                            <div class="service-card" data-service="st">
-                                <img src="https://cdn.simpleicons.org/steam/000000" alt="Steam" class="service-icon" width="32" height="32">
-                                <span>Steam</span>
-                            </div>
-                            <div class="service-card" data-service="pp">
-                                <img src="https://cdn.simpleicons.org/paypal/00457C" alt="PayPal" class="service-icon" width="32" height="32">
-                                <span>PayPal</span>
-                            </div>
-                            <div class="service-card" data-service="sp">
-                                <img src="https://cdn.simpleicons.org/spotify/1ED760" alt="Spotify" class="service-icon" width="32" height="32">
-                                <span>Spotify</span>
-                            </div>
-                            <div class="service-card" data-service="li">
-                                <img src="https://cdn.simpleicons.org/linkedin/0A66C2" alt="LinkedIn" class="service-icon" width="32" height="32">
-                                <span>LinkedIn</span>
-                            </div>
-                            <div class="service-card" data-service="sn">
-                                <img src="https://cdn.simpleicons.org/snapchat/FFFC00" alt="Snapchat" class="service-icon" width="32" height="32">
-                                <span>Snapchat</span>
-                            </div>
-                            <div class="service-card" data-service="pt">
-                                <img src="https://cdn.simpleicons.org/pinterest/E60023" alt="Pinterest" class="service-icon" width="32" height="32">
-                                <span>Pinterest</span>
-                            </div>
-                            <div class="service-card" data-service="vi">
-                                <img src="https://cdn.simpleicons.org/viber/7360F2" alt="Viber" class="service-icon" width="32" height="32">
-                                <span>Viber</span>
-                            </div>
-                            <div class="service-card" data-service="ln">
-                                <img src="https://cdn.simpleicons.org/line/00C300" alt="Line" class="service-icon" width="32" height="32">
-                                <span>Line</span>
-                            </div>
-                            <div class="service-card" data-service="yh">
-                                <img src="https://cdn.simpleicons.org/yahoo/410093" alt="Yahoo" class="service-icon" width="32" height="32">
-                                <span>Yahoo</span>
-                            </div>
-                            <div class="service-card" data-service="vk">
-                                <img src="https://cdn.simpleicons.org/vk/0077FF" alt="VK" class="service-icon" width="32" height="32">
-                                <span>VK</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 2: Select Country -->
-                    <div id="step-2" class="wizard-step">
-                        <button class="btn btn-back" id="btn-back-step1">← Back</button>
-                        <div class="step-header">
-                            <h3>2. Select Country for <span id="selected-service-name"></span></h3>
-                            <input type="text" id="search-countries" class="search-input" placeholder="Search country...">
-                        </div>
-                        <div class="country-list" id="country-container">
-                            <!-- Populated via JS, hardcoded for now as requested -->
-                            <div class="country-item">
-                                <div class="country-info"><span>USA 🇺🇸</span></div>
-                                <div class="country-action"><span class="price">$1.50</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>UK 🇬🇧</span></div>
-                                <div class="country-action"><span class="price">$1.20</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Russia 🇷🇺</span></div>
-                                <div class="country-action"><span class="price">$0.50</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>India 🇮🇳</span></div>
-                                <div class="country-action"><span class="price">$0.40</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Germany 🇩🇪</span></div>
-                                <div class="country-action"><span class="price">$1.80</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>France 🇫🇷</span></div>
-                                <div class="country-action"><span class="price">$1.70</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Spain 🇪🇸</span></div>
-                                <div class="country-action"><span class="price">$1.60</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Italy 🇮🇹</span></div>
-                                <div class="country-action"><span class="price">$1.60</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Brazil 🇧🇷</span></div>
-                                <div class="country-action"><span class="price">$0.80</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Canada 🇨🇦</span></div>
-                                <div class="country-action"><span class="price">$1.40</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Australia 🇦🇺</span></div>
-                                <div class="country-action"><span class="price">$1.90</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Netherlands 🇳🇱</span></div>
-                                <div class="country-action"><span class="price">$1.80</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Poland 🇵🇱</span></div>
-                                <div class="country-action"><span class="price">$1.10</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Ukraine 🇺🇦</span></div>
-                                <div class="country-action"><span class="price">$0.70</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Kazakhstan 🇰🇿</span></div>
-                                <div class="country-action"><span class="price">$0.60</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Turkey 🇹🇷</span></div>
-                                <div class="country-action"><span class="price">$0.90</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Indonesia 🇮🇩</span></div>
-                                <div class="country-action"><span class="price">$0.50</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Philippines 🇵🇭</span></div>
-                                <div class="country-action"><span class="price">$0.60</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Thailand 🇹🇭</span></div>
-                                <div class="country-action"><span class="price">$0.70</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                            <div class="country-item">
-                                <div class="country-info"><span>Chile 🇨🇱</span></div>
-                                <div class="country-action"><span class="price">$0.85</span> <button class="btn btn-buy btn-primary">Buy</button></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 3: Waiting for OTP -->
-                    <div id="step-3" class="wizard-step">
-                        <div class="step-card card">
-                            <h3>Awaiting SMS...</h3>
-                            <div class="otp-display">
-                                <div class="number-row">
-                                    <span class="label">Number:</span>
-                                    <span id="active-number" class="value fw-bold">+1 234 567 8900</span>
-                                    <button class="btn btn-sm btn-outline" id="btn-copy-number">Copy</button>
-                                </div>
-                                <div class="pulse-container">
-                                    <div class="pulse-dot"></div>
-                                    <span>Waiting for code...</span>
-                                </div>
-                                <div class="code-row" style="display: none;">
-                                    <span class="label">Code:</span>
-                                    <span id="active-code" class="otp-code value"></span>
-                                    <button class="btn btn-sm btn-outline" id="btn-copy-code">Copy</button>
-                                </div>
-                            </div>
-                            <div class="step-actions mt-3">
-                                <button class="btn btn-cancel" id="btn-cancel-order">Cancel Order</button>
-                                <button class="btn btn-primary" id="btn-complete-order" style="display: none;">Done</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SMS Inbox Page -->
-            <div id="page-sms" class="page">
-                <h2>SMS Inbox</h2>
-                <div class="search-bar mb-3">
-                    <input type="text" id="search-sms" class="search-input" placeholder="Search messages...">
-                </div>
-                <div class="sms-list" id="sms-container">
-                    <div class="empty-state">
-                        <p>No messages yet.</p>
-                    </div>
-                    <!-- Sample SMS Card structure
-                    <div class="sms-card card">
-                        <div class="sms-header">
-                            <span class="sms-sender">WhatsApp</span>
-                            <span class="sms-time">10:30 AM</span>
-                        </div>
-                        <div class="sms-body">
-                            Your WhatsApp code is: <span class="otp-code">123-456</span>
-                        </div>
-                        <div class="sms-footer">
-                            <span class="sms-recipient">To: +1 234 567 8900</span>
-                        </div>
-                    </div>
-                    -->
-                </div>
-            </div>
-
-            <!-- History Page -->
-            <div id="page-history" class="page">
-                <h2>Order History</h2>
-                <div class="tab-bar mb-3">
-                    <button class="tab active" data-filter="all">All</button>
-                    <button class="tab" data-filter="pending">Pending</button>
-                    <button class="tab" data-filter="completed">Completed</button>
-                    <button class="tab" data-filter="canceled">Canceled</button>
-                </div>
-                <div class="card">
-                    <div class="table-responsive">
-                        <table class="table" id="history-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Service</th>
-                                    <th>Country</th>
-                                    <th>Number</th>
-                                    <th>Price</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Empty state or items via JS -->
-                            </tbody>
-                        </table>
-                        <div id="history-empty-state" class="empty-state">
-                            <p>No order history.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-        </main>
-
-        <!-- Mobile Bottom Nav -->
-        <nav class="mobile-nav">
-            <a href="#" class="mobile-nav-item active" data-target="dashboard">
-                <span class="icon">📊</span>
-                <span class="label">Dash</span>
-            </a>
-            <a href="#" class="mobile-nav-item" data-target="services">
-                <span class="icon">📱</span>
-                <span class="label">Number</span>
-            </a>
-            <a href="#" class="mobile-nav-item" data-target="sms">
-                <span class="icon">✉️</span>
-                <span class="label">Inbox</span>
-            </a>
-            <a href="#" class="mobile-nav-item" data-target="history">
-                <span class="icon">🕒</span>
-                <span class="label">History</span>
-            </a>
-            <a href="#" class="mobile-nav-item" id="btn-mobile-profile">
-                <span class="icon">👤</span>
-                <span class="label">Profile</span>
-            </a>
-        </nav>
+    <!-- ══════ SMS INBOX ══════ -->
+    <div id="page-sms" class="page">
+      <div class="page-header"><h2>💬 SMS Inbox</h2><p class="page-subtitle">Real-time incoming messages</p></div>
+      <div class="card">
+        <div class="card-toolbar">
+          <div class="search-wrapper search-wrapper--wide"><span class="search-icon">🔍</span><input type="text" class="search-input" placeholder="Search messages..." oninput="App.filterSms(this.value)"></div>
+          <button class="btn btn-outline" onclick="App.loadSmsInbox()">🔄 Refresh</button>
+        </div>
+        <div id="smsInboxContainer"><div class="empty-state"><div class="empty-state-icon">💬</div><p>No SMS yet</p><p class="text-muted">Messages appear here in real-time</p></div></div>
+      </div>
     </div>
 
-    <!-- Toast Notifications Container -->
-    <div id="toast-container"></div>
+    <!-- ══════ HISTORY ══════ -->
+    <div id="page-history" class="page">
+      <div class="page-header"><h2>📋 Order History</h2><p class="page-subtitle">Track all your number purchases</p></div>
+      <div class="card">
+        <div class="tab-bar" id="historyTabs">
+          <button class="tab active" data-status="" onclick="App.filterHistory('')">All</button>
+          <button class="tab" data-status="pending" onclick="App.filterHistory('pending')">⏳ Pending</button>
+          <button class="tab" data-status="completed" onclick="App.filterHistory('completed')">✅ Completed</button>
+          <button class="tab" data-status="refunded" onclick="App.filterHistory('refunded')">💸 Refunded</button>
+          <button class="tab" data-status="canceled" onclick="App.filterHistory('canceled')">❌ Canceled</button>
+        </div>
+        <div class="table-responsive">
+          <table><thead><tr><th>Date</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Status</th></tr></thead>
+          <tbody id="historyTableBody"><tr><td colspan="6"><div class="empty-state"><p>No orders yet</p></div></td></tr></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <!-- Scripts -->
-    <script src="js/api.js"></script>
-    <script src="js/sse.js"></script>
-    <script src="js/app.js"></script>
+  <!-- Mobile Nav -->
+  <nav class="mobile-nav">
+    <a class="mobile-nav-item" data-page="dashboard" href="#/dashboard" onclick="App.requireAuth()"><span class="mobile-nav-icon">📊</span><span class="mobile-nav-label">Home</span></a>
+    <a class="mobile-nav-item active" data-page="services" href="#/services"><span class="mobile-nav-icon">🔢</span><span class="mobile-nav-label">Get Number</span></a>
+    <a class="mobile-nav-item" data-page="sms" href="#/sms" onclick="App.requireAuth()"><span class="mobile-nav-icon">💬</span><span class="mobile-nav-label">SMS</span><span class="mobile-nav-badge" id="smsBadge" style="display:none">0</span></a>
+    <a class="mobile-nav-item" data-page="history" href="#/history" onclick="App.requireAuth()"><span class="mobile-nav-icon">📋</span><span class="mobile-nav-label">History</span></a>
+    <a class="mobile-nav-item" onclick="App.isLoggedIn()?App.logout():document.getElementById('auth-view').style.display='flex'"><span class="mobile-nav-icon" id="mobileAuthIcon">🔐</span><span class="mobile-nav-label" id="mobileAuthLabel">Login</span></a>
+  </nav>
+
+  <div id="toastContainer" class="toast-container"></div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/sse.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

@@ -7,12 +7,12 @@ function generateToken(user) {
   return jwt.sign({ id: user.id, email: user.email, role: user.role }, SECRET, { expiresIn: '7d' });
 }
 
-function auth(req, res, next) {
+async function auth(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
   if (!token) return res.status(401).json({ error: 'No token provided' });
   try {
     const decoded = jwt.verify(token, SECRET);
-    const user = db.users.findById(decoded.id);
+    const user = await db.users.findById(decoded.id);
     if (!user || user.status !== 'active') return res.status(401).json({ error: 'Account disabled' });
     req.user = user;
     next();

@@ -1,331 +1,321 @@
-const initSqlJs = require('sql.js');
-const path = require('path');
-const fs = require('fs');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
-const DB_DIR = path.join(__dirname, '..', 'data');
-const DB_PATH = path.join(DB_DIR, 'smsbower.db');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('railway') ? { rejectUnauthorized: false } : false,
+});
 
-let db = null;
 let ready = false;
 const readyCallbacks = [];
 
 // ── Init ──
 (async function initDB() {
   try {
-    if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
-    const SQL = await initSqlJs();
+    const client = await pool.connect();
+    console.log('[DB] Connected to PostgreSQL');
 
-    if (fs.existsSync(DB_PATH)) {
-      db = new SQL.Database(fs.readFileSync(DB_PATH));
-      console.log('[DB] Loaded existing database');
-    } else {
-      db = new SQL.Database();
-      console.log('[DB] Created new database');
-    }
-
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+    await client.query(`CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       role TEXT DEFAULT 'user',
       balance REAL DEFAULT 0,
       status TEXT DEFAULT 'active',
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at TIMESTAMP DEFAULT NOW()
     )`);
 
-    db.run(`CREATE TABLE IF NOT EXISTS settings (
+    await client.query(`CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     )`);
 
-    db.run(`CREATE TABLE IF NOT EXISTS sim_cards (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+    await client.query(`CREATE TABLE IF NOT EXISTS sim_cards (
+      id SERIAL PRIMARY KEY,
       phone TEXT UNIQUE,
       iccid TEXT, imsi TEXT, carrier TEXT, mac TEXT,
       status INTEGER DEFAULT 0,
       active INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
     )`);
 
-    db.run(`CREATE TABLE IF NOT EXISTS activations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+    await client.query(`CREATE TABLE IF NOT EXISTS activations (
+      id SERIAL PRIMARY KEY,
       activation_id TEXT UNIQUE,
       phone TEXT, service TEXT, country TEXT, operator TEXT,
       status INTEGER DEFAULT 0,
       sum REAL DEFAULT 0, call INTEGER DEFAULT 0, voice INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
     )`);
 
-    db.run(`CREATE TABLE IF NOT EXISTS sms_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+    await client.query(`CREATE TABLE IF NOT EXISTS sms_messages (
+      id SERIAL PRIMARY KEY,
       activation_id TEXT, sender TEXT, recipient TEXT,
       text TEXT, raw_text TEXT, timestamp TEXT,
       pushed INTEGER DEFAULT 0, push_status TEXT DEFAULT '',
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at TIMESTAMP DEFAULT NOW()
     )`);
 
-    db.run(`CREATE TABLE IF NOT EXISTS services_config (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+    await client.query(`CREATE TABLE IF NOT EXISTS services_config (
+      id SERIAL PRIMARY KEY,
       country TEXT, operator TEXT, service_code TEXT,
       count INTEGER DEFAULT 0, active INTEGER DEFAULT 1
     )`);
 
-    db.run(`CREATE TABLE IF NOT EXISTS orders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+    await client.query(`CREATE TABLE IF NOT EXISTS orders (
+      id SERIAL PRIMARY KEY,
       user_id INTEGER, activation_id TEXT,
       service TEXT, country TEXT, operator TEXT,
       phone TEXT, status TEXT DEFAULT 'pending',
       cost REAL DEFAULT 0, price REAL DEFAULT 0, profit REAL DEFAULT 0,
       sms_text TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
+      expires_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
     )`);
 
-    db.run(`CREATE TABLE IF NOT EXISTS transactions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+    await client.query(`CREATE TABLE IF NOT EXISTS transactions (
+      id SERIAL PRIMARY KEY,
       user_id INTEGER, type TEXT,
       amount REAL, balance_after REAL,
       description TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at TIMESTAMP DEFAULT NOW()
     )`);
+
+    client.release();
 
     // Default settings
     const defaults = {
       profit_percentage: '30',
       min_order_amount: '0.10',
-      site_name: 'SmsBower OTP',
+      site_name: 'SMSMaster',
       site_description: 'Virtual Numbers for SMS Verification',
-      maintenance_mode: '0'
+      maintenance_mode: '0',
+      refund_timeout: '600',
+      currency_symbol: '$',
     };
     for (const [k, v] of Object.entries(defaults)) {
-      if (!queryOne('SELECT key FROM settings WHERE key = ?', [k])) {
-        execute('INSERT INTO settings (key, value) VALUES (?, ?)', [k, v]);
-      }
+      const existing = await q1('SELECT key FROM settings WHERE key = $1', [k]);
+      if (!existing) await exec('INSERT INTO settings (key, value) VALUES ($1, $2)', [k, v]);
     }
 
-    // Create default admin if not exists
+    // Create default admin
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@admin.com';
     const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
-    if (!queryOne('SELECT id FROM users WHERE role = ?', ['admin'])) {
+    const existingAdmin = await q1('SELECT id FROM users WHERE role = $1', ['admin']);
+    if (!existingAdmin) {
       const hash = bcrypt.hashSync(adminPass, 10);
-      execute('INSERT INTO users (email, password, role, balance) VALUES (?,?,?,?)',
+      await exec('INSERT INTO users (email, password, role, balance) VALUES ($1,$2,$3,$4)',
         [adminEmail, hash, 'admin', 99999]);
-      console.log(`[DB] Admin created: ${adminEmail} / ${adminPass}`);
+      console.log(`[DB] Admin created: ${adminEmail}`);
     }
 
-    saveToDisk();
     ready = true;
     readyCallbacks.forEach(cb => cb());
     readyCallbacks.length = 0;
     console.log('[DB] Ready');
+
+    // Start auto-refund checker
+    startRefundChecker();
   } catch (err) {
     console.error('[DB] Init failed:', err);
     process.exit(1);
   }
 })();
 
-// ── Persistence ──
-function saveToDisk() {
-  if (!db) return;
-  try { fs.writeFileSync(DB_PATH, Buffer.from(db.export())); } catch (e) { console.error('[DB] Save error:', e.message); }
-}
-setInterval(() => { if (ready) saveToDisk(); }, 5000);
-process.on('exit', saveToDisk);
-process.on('SIGINT', () => { saveToDisk(); process.exit(0); });
-process.on('SIGTERM', () => { saveToDisk(); process.exit(0); });
-
 function waitForReady() {
   return new Promise(resolve => { if (ready) return resolve(); readyCallbacks.push(resolve); });
 }
 
 // ── Query helpers ──
-function queryAll(sql, params = []) {
-  const stmt = db.prepare(sql);
-  if (params.length) stmt.bind(params);
-  const rows = [];
-  while (stmt.step()) rows.push(stmt.getAsObject());
-  stmt.free();
+async function qAll(sql, params = []) {
+  const { rows } = await pool.query(sql, params);
   return rows;
 }
-function queryOne(sql, params = []) {
-  const rows = queryAll(sql, params);
-  return rows.length > 0 ? rows[0] : null;
+async function q1(sql, params = []) {
+  const { rows } = await pool.query(sql, params);
+  return rows[0] || null;
 }
-function execute(sql, params = []) {
-  db.run(sql, params);
-  const changes = db.getRowsModified();
-  const lastId = queryOne('SELECT last_insert_rowid() as id');
-  return { changes, lastId: lastId ? lastId.id : null };
+async function exec(sql, params = []) {
+  const result = await pool.query(sql, params);
+  return { rowCount: result.rowCount };
+}
+async function execReturning(sql, params = []) {
+  const { rows } = await pool.query(sql + ' RETURNING id', params);
+  return { id: rows[0]?.id };
+}
+
+// ── Auto-Refund Checker ──
+function startRefundChecker() {
+  setInterval(async () => {
+    try {
+      const expired = await qAll(
+        "SELECT * FROM orders WHERE status = 'pending' AND expires_at IS NOT NULL AND expires_at < NOW()"
+      );
+      for (const order of expired) {
+        await exec("UPDATE orders SET status = 'refunded', updated_at = NOW() WHERE id = $1", [order.id]);
+        await exec('UPDATE users SET balance = balance + $1 WHERE id = $2', [order.price, order.user_id]);
+        const user = await q1('SELECT balance FROM users WHERE id = $1', [order.user_id]);
+        await exec(
+          'INSERT INTO transactions (user_id, type, amount, balance_after, description) VALUES ($1,$2,$3,$4,$5)',
+          [order.user_id, 'refund', order.price, user?.balance || 0, `Auto-refund: No SMS received for ${order.service}`]
+        );
+        console.log(`[REFUND] Order #${order.id} refunded $${order.price} to user #${order.user_id}`);
+      }
+    } catch (e) {
+      // silent
+    }
+  }, 30000); // check every 30s
 }
 
 // ══════════════════════════════════════════════════
 module.exports = {
   waitForReady,
+  pool,
 
-  // ── Users ──
   users: {
-    create(email, password, role = 'user') {
+    async create(email, password, role = 'user') {
       const hash = bcrypt.hashSync(password, 10);
-      const r = execute('INSERT INTO users (email, password, role) VALUES (?,?,?)', [email, hash, role]);
-      saveToDisk();
-      return r;
+      return execReturning('INSERT INTO users (email, password, role) VALUES ($1,$2,$3)', [email, hash, role]);
     },
-    findByEmail(email) { return queryOne('SELECT * FROM users WHERE email = ?', [email]); },
-    findById(id) { return queryOne('SELECT id, email, role, balance, status, created_at FROM users WHERE id = ?', [id]); },
-    getAll() { return queryAll('SELECT id, email, role, balance, status, created_at FROM users ORDER BY created_at DESC'); },
-    updateBalance(id, amount) {
-      execute("UPDATE users SET balance = balance + ?, created_at = created_at WHERE id = ?", [amount, id]);
-      saveToDisk();
-      return queryOne('SELECT balance FROM users WHERE id = ?', [id]);
+    async findByEmail(email) { return q1('SELECT * FROM users WHERE email = $1', [email]); },
+    async findById(id) { return q1('SELECT id, email, role, balance, status, created_at FROM users WHERE id = $1', [id]); },
+    async getAll() { return qAll('SELECT id, email, role, balance, status, created_at FROM users ORDER BY created_at DESC'); },
+    async updateBalance(id, amount) {
+      await exec('UPDATE users SET balance = balance + $1 WHERE id = $2', [amount, id]);
+      return q1('SELECT balance FROM users WHERE id = $1', [id]);
     },
-    setBalance(id, balance) {
-      execute("UPDATE users SET balance = ? WHERE id = ?", [balance, id]);
-      saveToDisk();
-    },
-    setStatus(id, status) {
-      execute("UPDATE users SET status = ? WHERE id = ?", [status, id]);
-      saveToDisk();
-    },
-    setRole(id, role) {
-      execute("UPDATE users SET role = ? WHERE id = ?", [role, id]);
-      saveToDisk();
-    },
+    async setBalance(id, balance) { await exec('UPDATE users SET balance = $1 WHERE id = $2', [balance, id]); },
+    async setStatus(id, status) { await exec('UPDATE users SET status = $1 WHERE id = $2', [status, id]); },
+    async setRole(id, role) { await exec('UPDATE users SET role = $1 WHERE id = $2', [role, id]); },
     verifyPassword(plain, hash) { return bcrypt.compareSync(plain, hash); },
-    count() { return (queryOne('SELECT COUNT(*) as c FROM users') || {}).c || 0; },
+    async count() { return ((await q1('SELECT COUNT(*) as c FROM users')) || {}).c || 0; },
   },
 
-  // ── Settings ──
   settings: {
-    get(key) { const r = queryOne('SELECT value FROM settings WHERE key = ?', [key]); return r ? r.value : null; },
-    set(key, value) {
-      const existing = queryOne('SELECT key FROM settings WHERE key = ?', [key]);
-      if (existing) execute('UPDATE settings SET value = ? WHERE key = ?', [value, key]);
-      else execute('INSERT INTO settings (key, value) VALUES (?, ?)', [key, value]);
-      saveToDisk();
+    async get(key) { const r = await q1('SELECT value FROM settings WHERE key = $1', [key]); return r ? r.value : null; },
+    async set(key, value) {
+      const existing = await q1('SELECT key FROM settings WHERE key = $1', [key]);
+      if (existing) await exec('UPDATE settings SET value = $1 WHERE key = $2', [value, key]);
+      else await exec('INSERT INTO settings (key, value) VALUES ($1, $2)', [key, value]);
     },
-    getAll() { return queryAll('SELECT * FROM settings'); },
+    async getAll() { return qAll('SELECT * FROM settings'); },
   },
 
-  // ── Transactions ──
   transactions: {
-    create(userId, type, amount, description) {
-      const user = queryOne('SELECT balance FROM users WHERE id = ?', [userId]);
+    async create(userId, type, amount, description) {
+      const user = await q1('SELECT balance FROM users WHERE id = $1', [userId]);
       const balanceAfter = (user ? user.balance : 0) + amount;
-      execute('INSERT INTO transactions (user_id, type, amount, balance_after, description) VALUES (?,?,?,?,?)',
+      await exec('INSERT INTO transactions (user_id, type, amount, balance_after, description) VALUES ($1,$2,$3,$4,$5)',
         [userId, type, amount, balanceAfter, description]);
-      saveToDisk();
     },
-    getByUser(userId, limit = 50, offset = 0) {
-      return queryAll('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?', [userId, limit, offset]);
+    async getByUser(userId, limit = 50, offset = 0) {
+      return qAll('SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [userId, limit, offset]);
     },
-    getAll(limit = 100, offset = 0) {
-      return queryAll('SELECT t.*, u.email FROM transactions t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.created_at DESC LIMIT ? OFFSET ?', [limit, offset]);
+    async getAll(limit = 100, offset = 0) {
+      return qAll('SELECT t.*, u.email FROM transactions t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.created_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
     },
   },
 
-  // ── Orders ──
   orders: {
-    create(order) {
-      const r = execute(
-        'INSERT INTO orders (user_id, activation_id, service, country, operator, phone, status, cost, price, profit) VALUES (?,?,?,?,?,?,?,?,?,?)',
-        [order.user_id, order.activation_id, order.service, order.country, order.operator, order.phone, order.status || 'pending', order.cost, order.price, order.profit]
+    async create(order) {
+      const r = await execReturning(
+        'INSERT INTO orders (user_id, activation_id, service, country, operator, phone, status, cost, price, profit, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        [order.user_id, order.activation_id, order.service, order.country, order.operator, order.phone,
+         order.status || 'pending', order.cost, order.price, order.profit, order.expires_at || null]
       );
-      saveToDisk();
       return r;
     },
-    updateStatus(id, status, smsText) {
-      execute("UPDATE orders SET status = ?, sms_text = ?, updated_at = datetime('now') WHERE id = ? OR activation_id = ?",
-        [status, smsText || null, id, id]);
-      saveToDisk();
+    async updateStatus(id, status, smsText) {
+      await exec("UPDATE orders SET status = $1, sms_text = $2, updated_at = NOW() WHERE id = $3 OR activation_id = $3",
+        [status, smsText || null, id]);
     },
-    getByUser(userId, limit = 50, offset = 0) {
-      return queryAll('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?', [userId, limit, offset]);
+    async getByUser(userId, limit = 50, offset = 0) {
+      return qAll('SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [userId, limit, offset]);
     },
-    getAll(limit = 100, offset = 0) {
-      return queryAll('SELECT o.*, u.email FROM orders o LEFT JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC LIMIT ? OFFSET ?', [limit, offset]);
+    async getAll(limit = 100, offset = 0) {
+      return qAll('SELECT o.*, u.email FROM orders o LEFT JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
     },
-    countByStatus() {
-      return queryAll('SELECT status, COUNT(*) as count FROM orders GROUP BY status');
-    },
-    totalRevenue() {
-      return (queryOne('SELECT SUM(profit) as total FROM orders WHERE status = ?', ['completed']) || {}).total || 0;
+    async totalRevenue() {
+      return ((await q1("SELECT COALESCE(SUM(profit),0) as total FROM orders WHERE status = 'completed'")) || {}).total || 0;
     },
   },
 
-  // ── SIM Cards ──
   simCards: {
-    upsert(sim) {
-      const existing = queryOne('SELECT id FROM sim_cards WHERE phone = ?', [sim.phone]);
-      if (existing) execute("UPDATE sim_cards SET iccid=?, imsi=?, mac=?, status=?, active=?, updated_at=datetime('now') WHERE phone=?",
+    async upsert(sim) {
+      const existing = await q1('SELECT id FROM sim_cards WHERE phone = $1', [sim.phone]);
+      if (existing) await exec("UPDATE sim_cards SET iccid=$1, imsi=$2, mac=$3, status=$4, active=$5, updated_at=NOW() WHERE phone=$6",
         [sim.iccid, sim.imsi, sim.mac, sim.status, sim.active, sim.phone]);
-      else execute('INSERT INTO sim_cards (phone, iccid, imsi, mac, status, active) VALUES (?,?,?,?,?,?)',
+      else await exec('INSERT INTO sim_cards (phone, iccid, imsi, mac, status, active) VALUES ($1,$2,$3,$4,$5,$6)',
         [sim.phone, sim.iccid, sim.imsi, sim.mac, sim.status, sim.active]);
-      saveToDisk();
     },
-    getAll() { return queryAll('SELECT * FROM sim_cards ORDER BY updated_at DESC'); },
-    getAvailable() { return queryOne('SELECT * FROM sim_cards WHERE active = 1 LIMIT 1'); },
-    count() { return (queryOne('SELECT COUNT(*) as c FROM sim_cards') || {}).c || 0; },
-    activeCount() { return (queryOne('SELECT COUNT(*) as c FROM sim_cards WHERE active = 1') || {}).c || 0; },
+    async getAll() { return qAll('SELECT * FROM sim_cards ORDER BY updated_at DESC'); },
+    async getAvailable() { return q1('SELECT * FROM sim_cards WHERE active = 1 LIMIT 1'); },
+    async count() { return ((await q1('SELECT COUNT(*) as c FROM sim_cards')) || {}).c || 0; },
+    async activeCount() { return ((await q1('SELECT COUNT(*) as c FROM sim_cards WHERE active = 1')) || {}).c || 0; },
   },
 
-  // ── Activations ──
   activations: {
-    create(act) { const r = execute('INSERT INTO activations (activation_id, phone, service, country, operator, status, sum, call, voice) VALUES (?,?,?,?,?,?,?,?,?)',
-      [act.activation_id, act.phone, act.service, act.country, act.operator, act.status, act.sum, act.call, act.voice]); saveToDisk(); return r; },
-    updateStatus(activationId, status) { execute("UPDATE activations SET status=?, updated_at=datetime('now') WHERE activation_id=?", [status, activationId]); saveToDisk(); },
-    getByPhone(phone) { return queryOne('SELECT * FROM activations WHERE phone = ? ORDER BY created_at DESC LIMIT 1', [phone]); },
-    getAll(status, limit = 20, offset = 0) {
+    async create(act) {
+      return execReturning('INSERT INTO activations (activation_id, phone, service, country, operator, status, sum, call, voice) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+        [act.activation_id, act.phone, act.service, act.country, act.operator, act.status, act.sum, act.call, act.voice]);
+    },
+    async updateStatus(activationId, status) {
+      await exec("UPDATE activations SET status=$1, updated_at=NOW() WHERE activation_id=$2", [status, activationId]);
+    },
+    async getByPhone(phone) { return q1('SELECT * FROM activations WHERE phone = $1 ORDER BY created_at DESC LIMIT 1', [phone]); },
+    async getAll(status, limit = 20, offset = 0) {
       if (status !== undefined && status !== '' && status !== null)
-        return queryAll('SELECT * FROM activations WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?', [parseInt(status), limit, offset]);
-      return queryAll('SELECT * FROM activations ORDER BY created_at DESC LIMIT ? OFFSET ?', [limit, offset]);
+        return qAll('SELECT * FROM activations WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [parseInt(status), limit, offset]);
+      return qAll('SELECT * FROM activations ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
     },
-    getById(id) { return queryOne('SELECT * FROM activations WHERE id = ? OR activation_id = ?', [id, id]); },
+    async getById(id) { return q1('SELECT * FROM activations WHERE activation_id = $1', [id]); },
   },
 
-  // ── SMS ──
   smsMessages: {
-    insert(sms) {
-      const r = execute('INSERT INTO sms_messages (activation_id, sender, recipient, text, raw_text, timestamp, pushed, push_status) VALUES (?,?,?,?,?,?,?,?)',
+    async insert(sms) {
+      const r = await execReturning('INSERT INTO sms_messages (activation_id, sender, recipient, text, raw_text, timestamp, pushed, push_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
         [sms.activation_id, sms.sender, sms.recipient, sms.text, sms.raw_text, sms.timestamp, sms.pushed, sms.push_status]);
-      saveToDisk();
-      return { lastInsertRowid: r.lastId };
+      return { lastInsertRowid: r.id };
     },
-    getAll(limit = 50, offset = 0) { return queryAll('SELECT * FROM sms_messages ORDER BY created_at DESC LIMIT ? OFFSET ?', [limit, offset]); },
-    getByActivationId(aid) { return queryAll('SELECT * FROM sms_messages WHERE activation_id = ? ORDER BY created_at DESC', [aid]); },
-    count() { return (queryOne('SELECT COUNT(*) as c FROM sms_messages') || {}).c || 0; },
-    todayCount() { return (queryOne("SELECT COUNT(*) as c FROM sms_messages WHERE date(created_at) = date('now')") || {}).c || 0; },
+    async getAll(limit = 50, offset = 0) { return qAll('SELECT * FROM sms_messages ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset]); },
+    async getByActivationId(aid) { return qAll('SELECT * FROM sms_messages WHERE activation_id = $1 ORDER BY created_at DESC', [aid]); },
+    async todayCount() { return ((await q1("SELECT COUNT(*) as c FROM sms_messages WHERE created_at::date = CURRENT_DATE")) || {}).c || 0; },
   },
 
-  // ── Services Config ──
   servicesConfig: {
-    getAll() { return queryAll('SELECT * FROM services_config WHERE active = 1'); },
-    getAllIncludingInactive() { return queryAll('SELECT * FROM services_config'); },
-    upsert(config) {
-      const existing = queryOne('SELECT id FROM services_config WHERE country=? AND operator=? AND service_code=?', [config.country, config.operator, config.service_code]);
-      if (existing) execute('UPDATE services_config SET count=?, active=? WHERE id=?', [config.count, config.active !== undefined ? config.active : 1, existing.id]);
-      else execute('INSERT INTO services_config (country, operator, service_code, count, active) VALUES (?,?,?,?,?)',
+    async getAll() { return qAll('SELECT * FROM services_config WHERE active = 1'); },
+    async getAllIncludingInactive() { return qAll('SELECT * FROM services_config'); },
+    async upsert(config) {
+      const existing = await q1('SELECT id FROM services_config WHERE country=$1 AND operator=$2 AND service_code=$3', [config.country, config.operator, config.service_code]);
+      if (existing) await exec('UPDATE services_config SET count=$1, active=$2 WHERE id=$3', [config.count, config.active !== undefined ? config.active : 1, existing.id]);
+      else await exec('INSERT INTO services_config (country, operator, service_code, count, active) VALUES ($1,$2,$3,$4,$5)',
         [config.country, config.operator, config.service_code, config.count, config.active !== undefined ? config.active : 1]);
-      saveToDisk();
     },
-    delete(id) { execute('DELETE FROM services_config WHERE id = ?', [id]); saveToDisk(); },
+    async delete(id) { await exec('DELETE FROM services_config WHERE id = $1', [id]); },
   },
 
-  // ── Dashboard Stats ──
   stats: {
-    admin() {
+    async admin() {
+      const [totalUsers, totalSims, activeSims, totalOrders, pendingOrders, completedOrders, todaySms, totalRevenue, totalSales, totalRefunds] = await Promise.all([
+        q1("SELECT COUNT(*) as c FROM users WHERE role = 'user'"),
+        q1('SELECT COUNT(*) as c FROM sim_cards'),
+        q1('SELECT COUNT(*) as c FROM sim_cards WHERE active = 1'),
+        q1('SELECT COUNT(*) as c FROM orders'),
+        q1("SELECT COUNT(*) as c FROM orders WHERE status = 'pending'"),
+        q1("SELECT COUNT(*) as c FROM orders WHERE status = 'completed'"),
+        q1("SELECT COUNT(*) as c FROM sms_messages WHERE created_at::date = CURRENT_DATE"),
+        q1("SELECT COALESCE(SUM(profit),0) as t FROM orders WHERE status = 'completed'"),
+        q1("SELECT COALESCE(SUM(price),0) as t FROM orders WHERE status = 'completed'"),
+        q1("SELECT COUNT(*) as c FROM orders WHERE status = 'refunded'"),
+      ]);
       return {
-        totalUsers: (queryOne('SELECT COUNT(*) as c FROM users WHERE role = ?', ['user']) || {}).c || 0,
-        totalSims: (queryOne('SELECT COUNT(*) as c FROM sim_cards') || {}).c || 0,
-        activeSims: (queryOne('SELECT COUNT(*) as c FROM sim_cards WHERE active = 1') || {}).c || 0,
-        totalOrders: (queryOne('SELECT COUNT(*) as c FROM orders') || {}).c || 0,
-        pendingOrders: (queryOne('SELECT COUNT(*) as c FROM orders WHERE status = ?', ['pending']) || {}).c || 0,
-        completedOrders: (queryOne('SELECT COUNT(*) as c FROM orders WHERE status = ?', ['completed']) || {}).c || 0,
-        todaySms: (queryOne("SELECT COUNT(*) as c FROM sms_messages WHERE date(created_at) = date('now')") || {}).c || 0,
-        totalRevenue: (queryOne("SELECT COALESCE(SUM(profit),0) as t FROM orders WHERE status = 'completed'") || {}).t || 0,
-        totalSales: (queryOne("SELECT COALESCE(SUM(price),0) as t FROM orders WHERE status = 'completed'") || {}).t || 0,
+        totalUsers: totalUsers?.c || 0, totalSims: totalSims?.c || 0, activeSims: activeSims?.c || 0,
+        totalOrders: totalOrders?.c || 0, pendingOrders: pendingOrders?.c || 0, completedOrders: completedOrders?.c || 0,
+        todaySms: todaySms?.c || 0, totalRevenue: totalRevenue?.t || 0, totalSales: totalSales?.t || 0,
+        totalRefunds: totalRefunds?.c || 0,
       };
     },
   },

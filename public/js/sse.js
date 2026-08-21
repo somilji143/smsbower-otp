@@ -1,5 +1,5 @@
 /* ============================================================
-   SmsBower OTP — Server-Sent Events Client
+   SMSMaster — Server-Sent Events Client
    Real-time SMS updates with auto-reconnect & notifications
    ============================================================ */
 const SSEClient = {
