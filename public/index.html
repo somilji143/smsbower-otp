@@ -92,6 +92,7 @@
 
       <!-- HERO -->
       <section class="hero-banner" id="heroBanner">
+        <div class="hero-bg-orbs"></div>
         <div class="hero-text">
           <span class="hero-tag"><svg width="12" height="12"><use href="#i-shield"/></svg> No physical SIM required</span>
           <h1>Virtual numbers for<br>receiving SMS codes</h1>
@@ -99,34 +100,73 @@
           <div class="hero-actions">
             <button class="btn btn-cta" onclick="document.getElementById('serviceSearch').focus()">Get a number <svg width="16" height="16"><use href="#i-arrow-right"/></svg></button>
             <div class="hero-stats">
-              <div><b id="statServices">1000+</b><span>services</span></div>
+              <div><b id="statServices" data-target="1000">0+</b><span>services</span></div>
               <i></i>
-              <div><b>190+</b><span>countries</span></div>
+              <div><b id="statCountries" data-target="190">0+</b><span>countries</span></div>
               <i></i>
               <div><b>&lt;60s</b><span>avg. delivery</span></div>
             </div>
           </div>
+          <div class="trust-indicators">
+            <div class="trust-avatars">
+              <div class="trust-avatar" style="background:#2aabee;"></div>
+              <div class="trust-avatar" style="background:#25d366;"></div>
+              <div class="trust-avatar" style="background:#ea4335;"></div>
+              <div class="trust-avatar" style="background:#f9a826;"></div>
+            </div>
+            <span>Trusted by <strong>50K+</strong> users</span>
+          </div>
         </div>
         <div class="hero-visual" aria-hidden="true">
-          <div class="phone">
-            <div class="phone-notch"></div>
-            <div class="phone-screen">
-              <div class="phone-time">9:41</div>
-              <div class="phone-msg">
-                <div class="phone-msg-head"><span class="phone-msg-dot"></span>Telegram</div>
-                <div class="phone-msg-body">Your login code:<br><b>584&nbsp;201</b></div>
-                <div class="phone-msg-time">just now</div>
-              </div>
-              <div class="phone-msg dim">
-                <div class="phone-msg-head"><span class="phone-msg-dot wa"></span>WhatsApp</div>
-                <div class="phone-msg-body">Code: <b>93-517</b></div>
-                <div class="phone-msg-time">2 min ago</div>
+          <div class="phone-wrapper">
+            <div class="phone-glow"></div>
+            <div class="phone">
+              <div class="phone-notch"></div>
+              <div class="phone-screen">
+                <div class="phone-time">9:41</div>
+                <div class="phone-msg delay-1">
+                  <div class="phone-msg-head"><span class="phone-msg-dot"></span>Telegram</div>
+                  <div class="phone-msg-body">Your login code:<br><b>584&nbsp;201</b></div>
+                  <div class="phone-msg-time">just now</div>
+                </div>
+                <div class="phone-msg delay-2">
+                  <div class="phone-msg-head"><span class="phone-msg-dot wa"></span>WhatsApp</div>
+                  <div class="phone-msg-body">Code: <b>93-517</b></div>
+                  <div class="phone-msg-time">2 min ago</div>
+                </div>
+                <div class="phone-msg delay-3">
+                  <div class="phone-msg-head"><span class="phone-msg-dot gg"></span>Google</div>
+                  <div class="phone-msg-body">
+                    <div class="typing-indicator"><span></span><span></span><span></span></div>
+                  </div>
+                  <div class="phone-msg-time">typing...</div>
+                </div>
               </div>
             </div>
+            <div class="float-chip chip-1"><svg width="13" height="13"><use href="#i-check"/></svg> Code received</div>
+            <div class="float-chip chip-2"><svg width="13" height="13"><use href="#i-bolt"/></svg> Instant</div>
           </div>
-          <div class="float-chip chip-1"><svg width="13" height="13"><use href="#i-check"/></svg> Code received</div>
-          <div class="float-chip chip-2"><svg width="13" height="13"><use href="#i-bolt"/></svg> Instant</div>
         </div>
+        <div class="hero-bottom-line"></div>
+        <script>
+          const counters = [
+            { el: document.getElementById('statServices'), target: 1000, suffix: '+' },
+            { el: document.getElementById('statCountries'), target: 190, suffix: '+' }
+          ];
+          counters.forEach(c => {
+            if(!c.el) return;
+            let current = 0;
+            const step = Math.ceil(c.target / 60);
+            const timer = setInterval(() => {
+              current += step;
+              if (current >= c.target) {
+                current = c.target;
+                clearInterval(timer);
+              }
+              c.el.innerText = current + c.suffix;
+            }, 16);
+          });
+        </script>
       </section>
 
       <div class="buy-layout">
