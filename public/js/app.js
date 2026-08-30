@@ -1,146 +1,88 @@
 /* ============================================================
-   SMSMaster — Main App Logic
-   Public browsing, auth-gated purchasing, auto-refund, real logos
+   SMSMaster — main app
+   Real catalog (all services, live prices & stock from provider),
+   real purchases, live OTP delivery, rank tiers, auto-refund.
    ============================================================ */
-const App = {
-  SERVICES: [
-    { id: 'wa', name: 'WhatsApp',  logo: 'https://cdn.simpleicons.org/whatsapp/25D366' },
-    { id: 'tg', name: 'Telegram',  logo: 'https://cdn.simpleicons.org/telegram/26A5E4' },
-    { id: 'go', name: 'Google',    logo: 'https://cdn.simpleicons.org/google/4285F4' },
-    { id: 'ig', name: 'Instagram', logo: 'https://cdn.simpleicons.org/instagram/E4405F' },
-    { id: 'fb', name: 'Facebook',  logo: 'https://cdn.simpleicons.org/facebook/1877F2' },
-    { id: 'tw', name: 'Twitter',   logo: 'https://cdn.simpleicons.org/x/000000' },
-    { id: 'tt', name: 'TikTok',    logo: 'https://cdn.simpleicons.org/tiktok/000000' },
-    { id: 'ds', name: 'Discord',   logo: 'https://cdn.simpleicons.org/discord/5865F2' },
-    { id: 'ms', name: 'Microsoft', logo: 'https://cdn.simpleicons.org/microsoft/00A4EF' },
-    { id: 'am', name: 'Amazon',    logo: 'https://cdn.simpleicons.org/amazon/FF9900' },
-    { id: 'nf', name: 'Netflix',   logo: 'https://cdn.simpleicons.org/netflix/E50914' },
-    { id: 'ub', name: 'Uber',      logo: 'https://cdn.simpleicons.org/uber/000000' },
-    { id: 'vk', name: 'VK',        logo: 'https://cdn.simpleicons.org/vk/0077FF' },
-    { id: 'vi', name: 'Viber',     logo: 'https://cdn.simpleicons.org/viber/7360F2' },
-    { id: 'st', name: 'Steam',     logo: 'https://cdn.simpleicons.org/steam/000000' },
-    { id: 'yh', name: 'Yahoo',     logo: 'https://cdn.simpleicons.org/yahoo/6001D2' },
-    { id: 'ln', name: 'Line',      logo: 'https://cdn.simpleicons.org/line/00C300' },
-    { id: 'pp', name: 'PayPal',    logo: 'https://cdn.simpleicons.org/paypal/003087' },
-    { id: 'sp', name: 'Spotify',   logo: 'https://cdn.simpleicons.org/spotify/1DB954' },
-    { id: 'li', name: 'LinkedIn',  logo: 'https://cdn.simpleicons.org/linkedin/0A66C2' },
-    { id: 'sn', name: 'Snapchat',  logo: 'https://cdn.simpleicons.org/snapchat/FFFC00' },
-    { id: 'pt', name: 'Pinterest', logo: 'https://cdn.simpleicons.org/pinterest/BD081C' },
-  ],
-  COUNTRIES: [
-    { id: 'usa', name: 'United States', flag: '🇺🇸', price: 0.50 },
-    { id: 'uk', name: 'United Kingdom', flag: '🇬🇧', price: 0.60 },
-    { id: 'russia', name: 'Russia', flag: '🇷🇺', price: 0.15 },
-    { id: 'india', name: 'India', flag: '🇮🇳', price: 0.12 },
-    { id: 'germany', name: 'Germany', flag: '🇩🇪', price: 0.80 },
-    { id: 'france', name: 'France', flag: '🇫🇷', price: 0.70 },
-    { id: 'spain', name: 'Spain', flag: '🇪🇸', price: 0.55 },
-    { id: 'italy', name: 'Italy', flag: '🇮🇹', price: 0.65 },
-    { id: 'brazil', name: 'Brazil', flag: '🇧🇷', price: 0.25 },
-    { id: 'canada', name: 'Canada', flag: '🇨🇦', price: 0.55 },
-    { id: 'australia', name: 'Australia', flag: '🇦🇺', price: 0.75 },
-    { id: 'netherlands', name: 'Netherlands', flag: '🇳🇱', price: 0.85 },
-    { id: 'poland', name: 'Poland', flag: '🇵🇱', price: 0.35 },
-    { id: 'ukraine', name: 'Ukraine', flag: '🇺🇦', price: 0.18 },
-    { id: 'kazakhstan', name: 'Kazakhstan', flag: '🇰🇿', price: 0.20 },
-    { id: 'turkey', name: 'Turkey', flag: '🇹🇷', price: 0.30 },
-    { id: 'indonesia', name: 'Indonesia', flag: '🇮🇩', price: 0.15 },
-    { id: 'philippines', name: 'Philippines', flag: '🇵🇭', price: 0.20 },
-    { id: 'thailand', name: 'Thailand', flag: '🇹🇭', price: 0.22 },
-    { id: 'chile', name: 'Chile', flag: '🇨🇱', price: 0.03 },
-  ],
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
+const App = {
   token: localStorage.getItem('token'),
   user: JSON.parse(localStorage.getItem('user') || 'null'),
-  state: { selectedService: null, selectedCountry: null, refundTimer: null },
+
+  services: [],        // [{code, name, logo}]
+  offers: [],          // per-country offers for the selected service
+  activations: [],     // live purchased numbers
+  state: { service: null, rank: 'all', serviceFilter: '', countryFilter: '' },
+  _pollTimers: {},
 
   // ── Init ──
   init() {
     this.updateAuthUI();
     this.setupRouting();
     this.setupSSE();
-    this.renderServiceGrid('');
+    this.loadServices();
+    if (this.isLoggedIn()) this.restoreActiveOrders();
+    setInterval(() => this.tickTimers(), 1000);
   },
 
   isLoggedIn() { return !!this.token; },
-
-  requireAuth() {
-    if (!this.isLoggedIn()) {
-      document.getElementById('auth-view').style.display = 'flex';
-      return false;
-    }
-    return true;
-  },
+  openAuth() { document.getElementById('auth-view').style.display = 'flex'; },
+  closeAuth() { document.getElementById('auth-view').style.display = 'none'; },
+  requireAuth() { if (!this.isLoggedIn()) { this.openAuth(); return false; } return true; },
 
   updateAuthUI() {
     const loggedIn = this.isLoggedIn();
-    const balEl = document.getElementById('userBalance');
-    const loginBtn = document.getElementById('loginBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const adminLink = document.getElementById('adminLink');
-    const mobileAuthIcon = document.getElementById('mobileAuthIcon');
-    const mobileAuthLabel = document.getElementById('mobileAuthLabel');
+    const show = (id, on, disp = 'inline-flex') => { const el = document.getElementById(id); if (el) el.style.display = on ? disp : 'none'; };
+    show('userBalance', loggedIn, 'inline-block');
+    show('addFundsBtn', loggedIn);
+    show('loginBtn', !loggedIn);
+    show('logoutBtn', loggedIn);
+    show('adminLink', loggedIn && this.user?.role === 'admin');
+    const bal = document.getElementById('userBalance');
+    if (loggedIn && bal) bal.textContent = `Balance: $${(+this.user?.balance || 0).toFixed(2)}`;
+  },
 
-    if (balEl) balEl.style.display = loggedIn ? 'inline-block' : 'none';
-    if (loginBtn) loginBtn.style.display = loggedIn ? 'none' : 'inline-flex';
-    if (logoutBtn) logoutBtn.style.display = loggedIn ? 'inline-flex' : 'none';
-    if (adminLink) adminLink.style.display = (loggedIn && this.user?.role === 'admin') ? 'inline-flex' : 'none';
-    if (mobileAuthIcon) mobileAuthIcon.textContent = loggedIn ? '🚪' : '🔐';
-    if (mobileAuthLabel) mobileAuthLabel.textContent = loggedIn ? 'Logout' : 'Login';
-
-    if (loggedIn && balEl) balEl.textContent = `$${(this.user?.balance || 0).toFixed(2)}`;
+  setBalance(balance) {
+    if (this.user) { this.user.balance = balance; localStorage.setItem('user', JSON.stringify(this.user)); }
+    this.updateAuthUI();
   },
 
   // ── Auth ──
-  async login() {
-    const email = document.getElementById('authEmail').value;
+  async login() { await this._auth('/auth/login'); },
+  async register() { await this._auth('/auth/register'); },
+  async _auth(endpoint) {
+    const email = document.getElementById('authEmail').value.trim();
     const password = document.getElementById('authPassword').value;
     const errEl = document.getElementById('authError');
     errEl.textContent = '';
     try {
-      const res = await fetch('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      this.setAuth(data);
-      document.getElementById('auth-view').style.display = 'none';
+      this.token = data.token;
+      this.user = data.user;
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      this.updateAuthUI();
+      this.closeAuth();
+      this.restoreActiveOrders();
       this.handleRoute();
+      this.showToast('Welcome!', 'success');
     } catch (e) { errEl.textContent = e.message; }
-  },
-  async register() {
-    const email = document.getElementById('authEmail').value;
-    const password = document.getElementById('authPassword').value;
-    const errEl = document.getElementById('authError');
-    errEl.textContent = '';
-    try {
-      const res = await fetch('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      this.setAuth(data);
-      document.getElementById('auth-view').style.display = 'none';
-      this.showToast('🎉 Account created!', 'success');
-      this.handleRoute();
-    } catch (e) { errEl.textContent = e.message; }
-  },
-  setAuth(data) {
-    this.token = data.token;
-    this.user = data.user;
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    this.updateAuthUI();
   },
   logout() {
-    this.token = null;
-    this.user = null;
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    this.token = null; this.user = null;
+    localStorage.removeItem('token'); localStorage.removeItem('user');
+    Object.values(this._pollTimers).forEach(clearInterval);
+    this._pollTimers = {}; this.activations = [];
+    this.renderActivations();
     this.updateAuthUI();
     window.location.hash = '#/services';
-    this.handleRoute();
   },
 
   async api(endpoint, options = {}) {
     const res = await fetch(endpoint, { ...options, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}`, ...(options.headers || {}) } });
-    if (res.status === 401) { this.logout(); throw new Error('Session expired'); }
+    if (res.status === 401) { this.logout(); this.openAuth(); throw new Error('Session expired — sign in again'); }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Request failed');
     return data;
@@ -154,260 +96,357 @@ const App = {
   getCurrentPage() { return (window.location.hash || '#/services').replace('#/', '') || 'services'; },
   handleRoute() {
     const page = this.getCurrentPage();
-    const authRequired = ['dashboard', 'sms', 'history'];
-    if (authRequired.includes(page) && !this.isLoggedIn()) {
-      document.getElementById('auth-view').style.display = 'flex';
-      return;
-    }
-    document.querySelectorAll('.nav-link,.mobile-nav-item').forEach(el => { el.classList.remove('active'); if (el.dataset.page === page) el.classList.add('active'); });
+    if (['dashboard', 'sms', 'history'].includes(page) && !this.isLoggedIn()) { this.openAuth(); return; }
+    document.querySelectorAll('.nav-link,.mob-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     (document.getElementById(`page-${page}`) || document.getElementById('page-services')).classList.add('active');
-    switch (page) {
-      case 'dashboard': this.loadDashboard(); break;
-      case 'services': this.renderServiceGrid(''); break;
-      case 'sms': this.loadSmsInbox(); break;
-      case 'history': this.loadHistory(); break;
-    }
+    if (page === 'dashboard') this.loadDashboard();
+    if (page === 'sms') this.loadSmsInbox();
+    if (page === 'history') this.loadHistory();
   },
 
   // ── SSE ──
   setupSSE() {
     SSEClient.init();
     SSEClient.onNewSms(sms => {
-      this.showToast(`📩 SMS from ${sms.sender || 'Unknown'}`, 'success');
-      const codeEl = document.getElementById('otpCode');
-      if (codeEl && codeEl.textContent.includes('Waiting')) {
-        const match = (sms.text || '').match(/\b(\d{4,8})\b/);
-        codeEl.textContent = match ? match[1] : sms.text;
-        codeEl.classList.remove('pulse');
-        this.showToast('✅ OTP received!', 'success');
-      }
       if (this.getCurrentPage() === 'sms') this.loadSmsInbox();
     });
+    SSEClient.onActivation(a => {
+      const act = this.activations.find(x => x.id === a.orderId);
+      if (!act) return;
+      act.status = a.status;
+      if (a.code) act.last_code = a.code;
+      if (a.status === 'completed' && a.code) this.showToast(`✅ Code received: ${a.code}`, 'success');
+      if (a.status === 'refunded') { this.showToast('💸 Number refunded to your balance', 'warning'); this.refreshBalance(); }
+      this.renderActivations();
+    });
+  },
+
+  async refreshBalance() {
+    try { const u = await this.api('/api/me'); this.setBalance(u.balance); } catch {}
   },
 
   showToast(msg, type = 'info') {
     const c = document.getElementById('toastContainer');
-    if (!c) return;
     const t = document.createElement('div');
     t.className = `toast toast-${type}`;
     t.textContent = msg;
     c.appendChild(t);
-    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3500);
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4000);
   },
 
-  // ── Dashboard ──
-  async loadDashboard() {
+  addFunds() {
+    this.showToast('💳 To add funds, contact support / the site admin', 'info');
+  },
+
+  /* ══════════ SERVICES (real, all of them) ══════════ */
+  async loadServices() {
+    const grid = document.getElementById('serviceGrid');
     try {
-      const s = await this.api('/api/dashboard');
-      document.getElementById('dashBalance').textContent = `$${parseFloat(s.balance || 0).toFixed(2)}`;
-      document.getElementById('dashOrders').textContent = s.totalOrders || 0;
-      document.getElementById('dashCompleted').textContent = s.completedOrders || 0;
-      document.getElementById('dashSpent').textContent = `$${s.totalSpent || '0.00'}`;
-      // Recent orders
-      const orders = await this.api('/api/orders?limit=5');
-      const el = document.getElementById('dashRecentOrders');
-      if (el && orders.length) {
-        el.innerHTML = orders.map(o => `<div class="sms-card"><div class="sms-header"><span class="sms-sender">${this.getServiceName(o.service)} · ${o.country || '-'}</span>${this.statusBadge(o.status)}</div><div class="sms-text" style="font-family:monospace;font-size:0.8125rem">${o.phone || '-'} · $${(o.price||0).toFixed(2)}</div></div>`).join('');
-      }
-    } catch (e) { console.error(e); }
-  },
-
-  // ── Services ──
-  renderServiceGrid(filter) {
-    const grid = document.getElementById('serviceSelectionGrid');
-    if (!grid) return;
-    const q = (filter || '').toLowerCase();
-    const filtered = this.SERVICES.filter(s => s.name.toLowerCase().includes(q) || s.id.includes(q));
-    grid.innerHTML = filtered.map(s => `
-      <div class="service-icon ${this.state.selectedService?.id === s.id ? 'selected' : ''}" onclick="App.selectService('${s.id}')">
-        <img src="${s.logo}" alt="${s.name}" width="32" height="32" loading="lazy" onerror="this.outerHTML='<span class=svc-emoji>📱</span>'">
-        <span class="svc-name">${s.name}</span>
-      </div>
-    `).join('') || '<div class="empty-state" style="grid-column:1/-1"><p>No services found</p></div>';
-  },
-  filterServices(v) { this.renderServiceGrid(v); },
-
-  selectService(id) {
-    this.state.selectedService = this.SERVICES.find(s => s.id === id);
-    this.renderServiceGrid(document.getElementById('serviceSearch')?.value || '');
-    const sel = document.getElementById('step1Selected');
-    if (sel) sel.textContent = this.state.selectedService ? `✓ ${this.state.selectedService.name}` : '';
-    const step2 = document.getElementById('step2');
-    if (step2) { step2.classList.remove('step-disabled'); step2.classList.add('step-active'); }
-    this.renderCountryList('');
-    this.state.selectedCountry = null;
-    this.resetStep3();
-  },
-
-  renderCountryList(filter) {
-    const list = document.getElementById('countrySelectionList');
-    if (!list) return;
-    const q = (filter || '').toLowerCase();
-    const filtered = this.COUNTRIES.filter(c => c.name.toLowerCase().includes(q));
-    list.innerHTML = filtered.map(c => `
-      <div class="country-item" onclick="App.buyNumber('${c.id}')">
-        <div class="country-item-info"><span class="country-flag">${c.flag}</span><span class="country-name">${c.name}</span></div>
-        <button class="btn btn-buy" onclick="event.stopPropagation();App.buyNumber('${c.id}')">$${c.price.toFixed(2)}</button>
-      </div>
-    `).join('') || '<div class="empty-state"><p>No countries found</p></div>';
-  },
-  filterCountries(v) { this.renderCountryList(v); },
-
-  // ── Buy Number ──
-  async buyNumber(countryId) {
-    if (!this.requireAuth()) return;
-    if (!this.state.selectedService) { this.showToast('Select a service first', 'warning'); return; }
-
-    const country = this.COUNTRIES.find(c => c.id === countryId);
-    this.state.selectedCountry = country;
-    const sel = document.getElementById('step2Selected');
-    if (sel && country) sel.textContent = `✓ ${country.flag} ${country.name}`;
-
-    const step3 = document.getElementById('step3');
-    if (step3) { step3.classList.remove('step-disabled'); step3.classList.add('step-active'); }
-
-    const display = document.getElementById('otpDisplay');
-    if (display) display.innerHTML = '<div class="loading-spinner"></div><p style="text-align:center;margin-top:8px;color:var(--gray-500)">Processing purchase...</p>';
-
-    try {
-      const result = await this.api('/api/buy-number', {
-        method: 'POST',
-        body: JSON.stringify({ service: this.state.selectedService.id, country: countryId, cost: country.price }),
-      });
-
-      // Update balance
-      this.user.balance = result.balance;
-      localStorage.setItem('user', JSON.stringify(this.user));
-      this.updateAuthUI();
-
-      // Show number + OTP area
-      if (display) {
-        display.innerHTML = `
-          <span class="otp-label">YOUR NUMBER</span>
-          <div class="otp-number" id="assignedNumber">${result.phone || 'Assigned'}</div>
-          <button class="btn btn-primary" onclick="App.copyNumber()">📋 Copy Number</button>
-          <div style="margin-top:16px;width:100%">
-            <span class="otp-label">OTP CODE</span>
-            <div class="otp-code pulse" id="otpCode" onclick="App.copyOTP()" title="Click to copy">Waiting...</div>
-            <p class="otp-hint">Click code to copy · Auto-updates via SSE</p>
-          </div>`;
-      }
-
-      // Show activation info with refund timer
-      const info = document.getElementById('activationInfo');
-      if (info) {
-        info.style.display = 'block';
-        document.getElementById('actService').textContent = this.state.selectedService.name;
-        document.getElementById('actCountry').textContent = country.name;
-        const refundMin = Math.floor((result.expiresIn || 600) / 60);
-        document.getElementById('actRefund').textContent = `${refundMin} min`;
-        this.startRefundCountdown(result.expiresIn || 600);
-      }
-
-      this.showToast(`✅ Number purchased for $${result.price}`, 'success');
-      step3?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
+      this.services = await fetch('/api/catalog/services').then(r => { if (!r.ok) throw new Error('catalog'); return r.json(); });
+      document.getElementById('serviceCount').textContent = `${this.services.length} services`;
+      this.renderServices();
     } catch (e) {
-      if (display) display.innerHTML = `<div class="empty-state"><div class="empty-state-icon">❌</div><p>${e.message}</p></div>`;
-      this.showToast(e.message, 'error');
+      grid.innerHTML = `<div class="empty-hint">⚠️ Could not load services from provider.<br>Check SMSBOWER_API_KEY on the server.</div>`;
     }
   },
 
-  startRefundCountdown(seconds) {
-    if (this.state.refundTimer) clearInterval(this.state.refundTimer);
-    let remaining = seconds;
-    const el = document.getElementById('actRefund');
-    this.state.refundTimer = setInterval(() => {
-      remaining--;
-      if (el) {
-        const m = Math.floor(remaining / 60);
-        const s = remaining % 60;
-        el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
-        if (remaining <= 60) el.style.color = 'var(--danger)';
+  avatarColor(code) {
+    let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return `hsl(${h},55%,45%)`;
+  },
+
+  renderServices() {
+    const grid = document.getElementById('serviceGrid');
+    const q = this.state.serviceFilter.toLowerCase();
+    const list = q ? this.services.filter(s => s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)) : this.services;
+    if (!list.length) { grid.innerHTML = '<div class="empty-hint">No services match your search</div>'; return; }
+    grid.innerHTML = list.map(s => `
+      <div class="service-cell ${this.state.service === s.code ? 'selected' : ''}" onclick="App.selectService('${esc(s.code)}')" title="${esc(s.name)}">
+        <img src="${esc(s.logo)}" alt="" loading="lazy"
+             onerror="this.outerHTML='<div class=&quot;service-avatar&quot; style=&quot;background:${this.avatarColor(s.code)}&quot;>${esc(s.name.charAt(0).toUpperCase())}</div>'">
+        <span class="svc-name">${esc(s.name)}</span>
+      </div>`).join('');
+  },
+  filterServices(v) { this.state.serviceFilter = v; this.renderServices(); },
+
+  async selectService(code) {
+    this.state.service = code;
+    this.renderServices();
+    const svc = this.services.find(s => s.code === code);
+    document.getElementById('selectedServiceLabel').textContent = svc ? `✓ ${svc.name}` : '';
+    const list = document.getElementById('countryList');
+    list.innerHTML = '<div class="loading-block"><div class="spinner"></div><p>Loading live prices…</p></div>';
+    document.getElementById('countryCount').textContent = '';
+    try {
+      this.offers = await fetch(`/api/catalog/offers?service=${encodeURIComponent(code)}`).then(async r => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Failed to load prices');
+        return d;
+      });
+      this.renderCountries();
+    } catch (e) {
+      list.innerHTML = `<div class="empty-hint">⚠️ ${esc(e.message)}</div>`;
+    }
+  },
+
+  setRank(rank) {
+    this.state.rank = rank;
+    document.querySelectorAll('#rankTabs .rank-tab').forEach(t => t.classList.toggle('active', t.dataset.rank === rank));
+    if (this.state.service) this.renderCountries();
+  },
+
+  renderCountries() {
+    const list = document.getElementById('countryList');
+    if (!this.state.service) { list.innerHTML = '<div class="empty-hint">👆 Pick a service first to see live prices &amp; stock</div>'; return; }
+    const q = this.state.countryFilter.toLowerCase();
+    const rank = this.state.rank;
+
+    let rows = this.offers.map(o => {
+      let price = o.price, count = o.count;
+      if (rank !== 'all') {
+        const tier = o.tiers?.[rank];
+        if (!tier || !tier.count) return null;
+        price = tier.price; count = tier.count;
       }
-      if (remaining <= 0) {
-        clearInterval(this.state.refundTimer);
-        if (el) el.textContent = 'Refunded';
-        this.showToast('💸 Auto-refunded — no SMS received', 'warning');
-        // Refresh user balance
-        this.api('/api/me').then(u => { this.user = u; localStorage.setItem('user', JSON.stringify(u)); this.updateAuthUI(); }).catch(() => {});
+      return { ...o, price, count };
+    }).filter(Boolean);
+
+    if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q));
+    document.getElementById('countryCount').textContent = `${rows.length} countries`;
+    if (!rows.length) { list.innerHTML = '<div class="empty-hint">No stock for this selection — try another rank or service</div>'; return; }
+
+    list.innerHTML = rows.map(r => `
+      <div class="country-row">
+        ${r.iso
+          ? `<img class="country-flag" src="https://flagcdn.com/w40/${esc(r.iso)}.png" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;country-flag-emoji&quot;>🌐</span>'">`
+          : '<span class="country-flag-emoji">🌐</span>'}
+        <div class="country-info">
+          <div class="country-name">${esc(r.name)}</div>
+          <div class="country-stock">${Number(r.count).toLocaleString()} available</div>
+        </div>
+        <button class="btn-buy" onclick="App.buyNumber('${esc(r.country)}', ${r.price})">$${r.price.toFixed(2)}</button>
+      </div>`).join('');
+  },
+  filterCountries(v) { this.state.countryFilter = v; this.renderCountries(); },
+
+  /* ══════════ BUY (real purchase from provider) ══════════ */
+  async buyNumber(country, shownPrice) {
+    if (!this.requireAuth()) return;
+    if (!this.state.service) { this.showToast('Select a service first', 'warning'); return; }
+    if ((+this.user?.balance || 0) < shownPrice) { this.showToast(`Insufficient balance — number costs $${shownPrice.toFixed(2)}. Use "Add funds".`, 'error'); return; }
+
+    this.showToast('⏳ Requesting a number…');
+    try {
+      const rank = this.state.rank !== 'all' ? this.state.rank : undefined;
+      const result = await this.api('/api/buy-number', { method: 'POST', body: JSON.stringify({ service: this.state.service, country, rank }) });
+      this.setBalance(result.balance);
+      this.addActivation({
+        id: result.orderId, activation_id: result.activationId, phone: result.phone,
+        service: result.service, service_name: result.serviceName,
+        country: result.country, country_name: result.countryName,
+        price: result.price, status: 'pending', last_code: null,
+        expires_at: result.expiresAt,
+      });
+      this.showToast(`✅ Number ready: +${result.phone} ($${result.price.toFixed(2)})`, 'success');
+      document.getElementById('activationsPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (e) { this.showToast(e.message, 'error'); }
+  },
+
+  async restoreActiveOrders() {
+    try {
+      const orders = await this.api('/api/active-orders');
+      orders.forEach(o => this.addActivation({ ...o, price: +o.price }));
+      this.refreshBalance();
+    } catch {}
+  },
+
+  addActivation(act) {
+    if (this.activations.some(a => a.id === act.id)) return;
+    this.activations.unshift(act);
+    this.renderActivations();
+    this.startPolling(act.id);
+  },
+
+  startPolling(orderId) {
+    if (this._pollTimers[orderId]) return;
+    this._pollTimers[orderId] = setInterval(async () => {
+      const act = this.activations.find(a => a.id === orderId);
+      if (!act || ['refunded', 'finished'].includes(act.status)) return this.stopPolling(orderId);
+      try {
+        const o = await this.api(`/api/orders/${orderId}/status`);
+        const hadCode = !!act.last_code;
+        act.status = o.status;
+        act.last_code = o.last_code;
+        if (o.last_code && !hadCode) this.showToast(`✅ Code received: ${o.last_code}`, 'success');
+        if (o.status === 'refunded') { this.showToast('💸 Refunded — no SMS received', 'warning'); this.refreshBalance(); this.stopPolling(orderId); }
+        this.renderActivations();
+      } catch {}
+    }, 4000);
+  },
+  stopPolling(orderId) { clearInterval(this._pollTimers[orderId]); delete this._pollTimers[orderId]; },
+
+  tickTimers() {
+    this.activations.forEach(act => {
+      const el = document.getElementById(`timer-${act.id}`);
+      if (!el || !act.expires_at) return;
+      const left = Math.max(0, Math.floor((new Date(act.expires_at) - Date.now()) / 1000));
+      const m = Math.floor(left / 60), s = left % 60;
+      el.textContent = `${m}:${String(s).padStart(2, '0')}`;
+      el.classList.toggle('danger', left < 120);
+      const cancelBtn = document.getElementById(`cancel-${act.id}`);
+      if (cancelBtn) {
+        const age = (Date.now() - new Date(act.created_at || Date.now() - 1)) / 1000;
+        const canCancel = act.created_at ? age > 120 : true;
+        cancelBtn.disabled = !canCancel;
+        cancelBtn.title = canCancel ? '' : 'Cancellation available 2 minutes after purchase';
       }
-    }, 1000);
+    });
   },
 
-  resetStep3() {
-    const step3 = document.getElementById('step3');
-    if (step3) { step3.classList.add('step-disabled'); step3.classList.remove('step-active'); }
-    const d = document.getElementById('otpDisplay');
-    if (d) d.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📱</div><p>Select service & country to get started</p></div>';
-    const info = document.getElementById('activationInfo');
-    if (info) info.style.display = 'none';
-    if (this.state.refundTimer) clearInterval(this.state.refundTimer);
+  renderActivations() {
+    const el = document.getElementById('activationsList');
+    const visible = this.activations.filter(a => !['finished'].includes(a.status));
+    if (!visible.length) { el.innerHTML = '<div class="empty-hint big">🔢 No active numbers yet — buy one on the left</div>'; return; }
+    el.innerHTML = visible.map(a => {
+      const svc = this.services.find(s => s.code === a.service);
+      const logo = svc?.logo || '';
+      const isDone = a.status === 'completed';
+      const isRefunded = a.status === 'refunded';
+      return `
+      <div class="act-card ${isDone ? 'completed' : ''}">
+        <img class="act-logo" src="${esc(logo)}" alt="" onerror="this.outerHTML='<div class=&quot;service-avatar act-logo&quot; style=&quot;background:${this.avatarColor(a.service || '?')}&quot;>${esc((a.service_name || a.service || '?').charAt(0).toUpperCase())}</div>'">
+        <div class="act-mid">
+          <div class="act-phone">+${esc(a.phone)} <button class="copy-btn" onclick="App.copy('+${esc(a.phone)}')">COPY</button></div>
+          <div class="act-sub">
+            ${esc(a.service_name || a.service)} · ${esc(a.country_name || a.country)}
+            · $${(+a.price || 0).toFixed(2)}
+            ${!isRefunded ? `· ⏳ <span class="act-timer" id="timer-${a.id}">--:--</span>` : ''}
+          </div>
+        </div>
+        <div class="act-code-zone">
+          ${isRefunded
+            ? '<span class="badge badge-info">💸 Refunded</span>'
+            : a.last_code
+              ? `<div class="act-code" onclick="App.copy('${esc(a.last_code)}')" title="Click to copy">${esc(a.last_code)}</div>`
+              : '<div class="act-waiting"><div class="spinner"></div> Waiting for SMS…</div>'}
+          ${!isRefunded ? `
+          <div class="act-actions">
+            ${a.last_code ? `
+              <button class="btn btn-outline btn-sm" onclick="App.retryOrder(${a.id})" title="Request another SMS on this number (free)">↻ Another SMS</button>
+              <button class="btn btn-primary btn-sm" onclick="App.finishOrder(${a.id})">✓ Done</button>
+            ` : `
+              <button class="btn-danger-ghost" id="cancel-${a.id}" onclick="App.cancelOrder(${a.id})">✕ Cancel</button>
+            `}
+          </div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    this.tickTimers();
   },
 
-  cancelActivation() {
-    this.resetStep3();
-    this.showToast('Order canceled', 'warning');
+  async cancelOrder(id) {
+    try {
+      const r = await this.api(`/api/orders/${id}/cancel`, { method: 'POST' });
+      const act = this.activations.find(a => a.id === id);
+      if (act) act.status = 'refunded';
+      this.setBalance(r.balance);
+      this.stopPolling(id);
+      this.renderActivations();
+      this.showToast('💸 Cancelled — money refunded', 'success');
+    } catch (e) { this.showToast(e.message, 'error'); }
   },
 
-  // ── Clipboard ──
-  copyNumber() { const n = document.getElementById('assignedNumber')?.textContent; if (n) { navigator.clipboard.writeText(n); this.showToast('📋 Number copied!', 'success'); } },
-  copyOTP() { const c = document.getElementById('otpCode')?.textContent; if (c && !c.includes('Waiting')) { navigator.clipboard.writeText(c.trim()); this.showToast('📋 OTP copied!', 'success'); } },
-  copyText(t) { navigator.clipboard.writeText(t); this.showToast(`📋 Copied: ${t}`, 'success'); },
+  async retryOrder(id) {
+    try {
+      await this.api(`/api/orders/${id}/retry`, { method: 'POST' });
+      const act = this.activations.find(a => a.id === id);
+      if (act) { act.status = 'pending'; act.last_code = null; }
+      this.startPolling(id);
+      this.renderActivations();
+      this.showToast('↻ Waiting for the next SMS…');
+    } catch (e) { this.showToast(e.message, 'error'); }
+  },
 
-  // ── SMS ──
+  async finishOrder(id) {
+    try {
+      await this.api(`/api/orders/${id}/finish`, { method: 'POST' });
+      this.activations = this.activations.filter(a => a.id !== id);
+      this.stopPolling(id);
+      this.renderActivations();
+      this.showToast('✓ Activation completed', 'success');
+    } catch (e) { this.showToast(e.message, 'error'); }
+  },
+
+  copy(text) { navigator.clipboard.writeText(text); this.showToast(`📋 Copied: ${text}`, 'success'); },
+
+  /* ══════════ DASHBOARD ══════════ */
+  async loadDashboard() {
+    try {
+      const s = await this.api('/api/dashboard');
+      document.getElementById('dashBalance').textContent = `$${(+s.balance || 0).toFixed(2)}`;
+      document.getElementById('dashOrders').textContent = s.totalOrders || 0;
+      document.getElementById('dashCompleted').textContent = s.completedOrders || 0;
+      document.getElementById('dashSpent').textContent = `$${s.totalSpent || '0.00'}`;
+      const orders = await this.api('/api/orders?limit=6');
+      const el = document.getElementById('dashRecentOrders');
+      el.innerHTML = orders.length ? orders.map(o => `
+        <div class="sms-card">
+          <div class="sms-header"><span class="sms-sender">${esc(o.service_name || o.service)} · ${esc(o.country_name || o.country || '-')}</span>${this.statusBadge(o.status)}</div>
+          <div class="sms-text" style="font-family:monospace">+${esc(o.phone)} · $${(+o.price || 0).toFixed(2)}${o.last_code ? ` · code: <b>${esc(o.last_code)}</b>` : ''}</div>
+        </div>`).join('') : '<div class="empty-hint">No orders yet</div>';
+    } catch (e) { console.error(e); }
+  },
+
+  /* ══════════ SMS INBOX ══════════ */
   async loadSmsInbox() {
     const c = document.getElementById('smsInboxContainer');
-    if (!c) return;
-    c.innerHTML = '<div class="loading-spinner"></div>';
+    c.innerHTML = '<div class="loading-block"><div class="spinner"></div></div>';
     try {
       const sms = await this.api('/api/sms');
-      if (!sms.length) { c.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💬</div><p>No SMS yet</p><p class="text-muted">Messages appear here in real-time</p></div>'; return; }
       this._smsData = sms;
       this.renderSmsList(sms);
-    } catch (e) { c.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`; }
+    } catch (e) { c.innerHTML = `<div class="empty-hint">${esc(e.message)}</div>`; }
   },
   renderSmsList(list) {
     const c = document.getElementById('smsInboxContainer');
-    if (!c) return;
+    if (!list.length) { c.innerHTML = '<div class="empty-hint big">💬 No SMS yet — they appear here in real time</div>'; return; }
     c.innerHTML = list.map(m => {
+      const text = esc(m.text).replace(/\b(\d{4,8})\b/g, '<span class="sms-otp-highlight" onclick="App.copy(\'$1\')">$1</span>');
       const time = m.timestamp || m.created_at;
-      const text = (m.text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\b(\d{4,8})\b/g, '<span class="sms-otp-highlight" onclick="App.copyText(\'$1\')">$1</span>');
-      return `<div class="sms-card"><div class="sms-header"><span class="sms-sender">${(m.sender||'Unknown').replace(/</g,'&lt;')}</span><span class="sms-time">${time ? new Date(time).toLocaleString() : ''}</span></div>${m.recipient ? `<div class="sms-recipient">To: ${m.recipient}</div>` : ''}<div class="sms-text">${text}</div></div>`;
+      return `<div class="sms-card"><div class="sms-header"><span class="sms-sender">${esc(m.sender || 'Unknown')}</span><span class="sms-time">${time ? new Date(time).toLocaleString() : ''}</span></div>${m.recipient ? `<div class="sms-recipient">To: ${esc(m.recipient)}</div>` : ''}<div class="sms-text">${text}</div></div>`;
     }).join('');
   },
-  filterSms(q) { if (!this._smsData) return; const f = q.toLowerCase(); this.renderSmsList(this._smsData.filter(m => (m.text||'').toLowerCase().includes(f) || (m.sender||'').toLowerCase().includes(f))); },
+  filterSms(q) { if (!this._smsData) return; const f = q.toLowerCase(); this.renderSmsList(this._smsData.filter(m => (m.text || '').toLowerCase().includes(f) || (m.sender || '').toLowerCase().includes(f))); },
 
-  // ── History ──
+  /* ══════════ HISTORY ══════════ */
   async loadHistory(status) {
     const tbody = document.getElementById('historyTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center"><div class="loading-spinner"></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center"><div class="spinner" style="margin:12px auto"></div></td></tr>';
     try {
-      const orders = await this.api('/api/orders');
+      const orders = await this.api('/api/orders?limit=200');
       const filtered = status ? orders.filter(o => o.status === status) : orders;
-      if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><p>No orders</p></div></td></tr>'; return; }
-      tbody.innerHTML = filtered.map(a => `<tr>
-        <td>${a.created_at ? new Date(a.created_at).toLocaleDateString() : '-'}</td>
-        <td>${this.getServiceName(a.service)}</td><td>${a.country || '-'}</td>
-        <td style="font-family:monospace">${a.phone || '-'}</td>
-        <td>$${(a.price || 0).toFixed(2)}</td>
-        <td>${this.statusBadge(a.status)}</td>
+      if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="7"><div class="empty-hint">No orders</div></td></tr>'; return; }
+      tbody.innerHTML = filtered.map(o => `<tr>
+        <td>${o.created_at ? new Date(o.created_at).toLocaleString() : '-'}</td>
+        <td>${esc(o.service_name || o.service)}</td>
+        <td>${esc(o.country_name || o.country || '-')}</td>
+        <td style="font-family:monospace">+${esc(o.phone || '-')}</td>
+        <td>${o.last_code ? `<span class="sms-otp-highlight" onclick="App.copy('${esc(o.last_code)}')">${esc(o.last_code)}</span>` : '—'}</td>
+        <td>$${(+o.price || 0).toFixed(2)}</td>
+        <td>${this.statusBadge(o.status)}</td>
       </tr>`).join('');
-    } catch (e) { tbody.innerHTML = `<tr><td colspan="6">${e.message}</td></tr>`; }
+    } catch (e) { tbody.innerHTML = `<tr><td colspan="7">${esc(e.message)}</td></tr>`; }
   },
   filterHistory(status) {
-    document.querySelectorAll('#historyTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.status === status));
+    document.querySelectorAll('#historyTabs .chip').forEach(t => t.classList.toggle('active', t.dataset.status === status));
     this.loadHistory(status || undefined);
   },
 
-  // ── Helpers ──
-  getServiceName(code) { const s = this.SERVICES.find(x => x.id === code); return s ? s.name : (code || '-'); },
   statusBadge(s) {
-    if (s === 'completed') return '<span class="badge badge-success">✅ Completed</span>';
+    if (s === 'completed' || s === 'finished') return '<span class="badge badge-success">✅ Completed</span>';
     if (s === 'refunded') return '<span class="badge badge-info">💸 Refunded</span>';
-    if (s === 'canceled') return '<span class="badge badge-canceled">❌ Canceled</span>';
+    if (s === 'canceled') return '<span class="badge badge-canceled">✕ Canceled</span>';
     return '<span class="badge badge-waiting">⏳ Pending</span>';
   },
 };

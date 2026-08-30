@@ -5,7 +5,14 @@ const { auth, adminOnly } = require('../middleware/auth');
 
 router.use(auth, adminOnly);
 
-router.get('/stats', async (req, res) => { res.json(await db.stats.admin()); });
+router.get('/stats', async (req, res) => {
+  const stats = await db.stats.admin();
+  try {
+    const provider = require('./provider');
+    stats.providerBalance = await provider.getBalance();
+  } catch (e) { stats.providerBalance = null; stats.providerError = e.message; }
+  res.json(stats);
+});
 
 // Users
 router.get('/users', async (req, res) => { res.json(await db.users.getAll()); });

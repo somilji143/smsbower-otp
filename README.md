@@ -1,16 +1,23 @@
-# ⚡ SmsBower OTP Platform
+# ⚡ SmsBower OTP Reseller Platform
 
-Full-stack OTP/SMS verification platform integrated with the [SmsBower Partner API](https://smsbower.app). Features user authentication, admin panel with profit management, real-time SMS monitoring, and responsive UI.
+Full-stack OTP/SMS reselling platform on top of the [SmsBower activation API](https://smsbower.app/api). All services, countries, prices and stock are pulled live from SmsBower; your profit margin is added on top automatically.
 
 ## Features
 
-- **User Dashboard** — Buy virtual numbers, receive OTP codes, track orders
-- **Admin Panel** — User management, profit %, financial overview, SIM monitoring
-- **Real Service Logos** — WhatsApp, Telegram, Google, Instagram, and 20+ services
-- **Real-time SMS** — Server-Sent Events for instant OTP delivery
-- **JWT Authentication** — Secure login/register with role-based access
-- **SmsBower API Integration** — Webhook handler, PUSH_SMS, GET_SERVICES, GET_NUMBER
-- **Responsive UI** — Mobile-first design, works on all devices
+- **Real catalog** — every service and country SmsBower offers, with live prices & stock
+- **Position ranks** — Gold / Silver / Bronze provider tiers per country
+- **Real purchases** — numbers bought via `getNumberV2`, OTP codes polled via `getStatus`
+- **Auto-refund** — expired activations are cancelled upstream and refunded to the user
+- **Profit margin** — admin sets `profit_percentage`; every displayed price = provider cost + margin
+- **Admin Panel** — users, balances, profit %, orders, transactions, SmsBower balance
+- **Real-time updates** — Server-Sent Events push codes/refunds instantly
+- **JWT Authentication** — login/register with role-based access
+
+## Admin panel access
+
+Open **`/admin.html`** (e.g. http://localhost:3000/admin.html) and log in with the admin
+account defined by `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars.
+Default: `admin@admin.com` / `admin123` — **change this in production!**
 
 ## Quick Start
 
@@ -30,9 +37,10 @@ Open http://localhost:3000
 
 | Variable | Description |
 |----------|-------------|
-| `SMSBOWER_BASE_URL` | SmsBower API base URL |
-| `SMSBOWER_API_KEY` | Your SmsBower API key |
-| `PARTNER_API_KEY` | Your partner/webhook API key |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `SMSBOWER_BASE_URL` | SmsBower base URL (default `https://smsbower.online`) |
+| `SMSBOWER_API_KEY` | Your SmsBower **user API key** (profile → API) — required for reselling |
+| `PARTNER_API_KEY` | Only for GSM-modem suppliers (partner protocol), optional |
 | `JWT_SECRET` | Secret key for JWT tokens |
 | `ADMIN_EMAIL` | Default admin email |
 | `ADMIN_PASSWORD` | Default admin password |
@@ -60,11 +68,21 @@ Open http://localhost:3000
 - `POST /auth/register` — Register new user
 - `POST /auth/login` — Login, returns JWT
 
+### Public catalog (live from SmsBower)
+- `GET /api/catalog/services` — all services with logos
+- `GET /api/catalog/countries` — all countries with ISO codes for flags
+- `GET /api/catalog/offers?service=tg` — per-country price/stock + Gold/Silver/Bronze tiers
+
 ### User API (requires JWT)
 - `GET /api/dashboard` — User stats
 - `GET /api/orders` — User's orders
+- `POST /api/buy-number` — Buy a real number `{service, country, rank?}`
+- `GET /api/orders/:id/status` — Poll activation (proxies SmsBower getStatus)
+- `POST /api/orders/:id/cancel` — Cancel + refund (allowed 2 min after purchase)
+- `POST /api/orders/:id/retry` — Request another SMS (free)
+- `POST /api/orders/:id/finish` — Complete activation
 - `GET /api/sms` — SMS messages
-- `GET /api/sms/stream` — SSE real-time stream
+- `GET /api/sms/stream` — SSE real-time stream (`sms` + `activation` events)
 
 ### Admin API (requires JWT + admin role)
 - `GET /admin/stats` — Platform statistics

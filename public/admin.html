@@ -499,6 +499,7 @@
                     <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-info"><h3>Completed Orders</h3><p id="stat-completed">0</p></div></div>
                     <div class="stat-card"><div class="stat-icon">💬</div><div class="stat-info"><h3>Today's SMS</h3><p id="stat-sms-today">0</p></div></div>
                     <div class="stat-card"><div class="stat-icon">📈</div><div class="stat-info"><h3>Total Sales</h3><p id="stat-sales">$0.00</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">🏦</div><div class="stat-info"><h3>SmsBower Balance</h3><p id="stat-provider">—</p></div></div>
                 </div>
             </div>
 
@@ -782,7 +783,7 @@
 
         // State
         let currentPage = 'dashboard';
-        const apiBase = '/admin/';
+        const apiBase = '/admin/api/';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -933,6 +934,7 @@
                 document.getElementById('stat-completed').innerText = stats.completedOrders || 0;
                 document.getElementById('stat-sms-today').innerText = stats.smsToday || 0;
                 document.getElementById('stat-sales').innerText = formatMoney(stats.totalSales || 0);
+                document.getElementById('stat-provider').innerText = stats.providerBalance != null ? formatMoney(stats.providerBalance) : (stats.providerError ? '⚠ API key' : '—');
             } catch (e) {
                 console.error("Dashboard load error", e);
             }

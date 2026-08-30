@@ -100,6 +100,10 @@ const readyCallbacks = [];
       created_at TIMESTAMP DEFAULT NOW()
     )`);
 
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS last_code TEXT`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS country_name TEXT`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS service_name TEXT`);
+
     client.release();
 
     // Default settings
@@ -109,7 +113,7 @@ const readyCallbacks = [];
       site_name: 'SMSMaster',
       site_description: 'Virtual Numbers for SMS Verification',
       maintenance_mode: '0',
-      refund_timeout: '600',
+      refund_timeout: '1200',
       currency_symbol: '$',
     };
     for (const [k, v] of Object.entries(defaults)) {
@@ -132,9 +136,6 @@ const readyCallbacks = [];
     readyCallbacks.forEach(cb => cb());
     readyCallbacks.length = 0;
     console.log('[DB] Ready');
-
-    // Start auto-refund checker
-    startRefundChecker();
   } catch (err) {
     console.error('[DB] Init failed:', err);
     process.exit(1);
@@ -161,29 +162,6 @@ async function exec(sql, params = []) {
 async function execReturning(sql, params = []) {
   const { rows } = await pool.query(sql + ' RETURNING id', params);
   return { id: rows[0]?.id };
-}
-
-// ── Auto-Refund Checker ──
-function startRefundChecker() {
-  setInterval(async () => {
-    try {
-      const expired = await qAll(
-        "SELECT * FROM orders WHERE status = 'pending' AND expires_at IS NOT NULL AND expires_at < NOW()"
-      );
-      for (const order of expired) {
-        await exec("UPDATE orders SET status = 'refunded', updated_at = NOW() WHERE id = $1", [order.id]);
-        await exec('UPDATE users SET balance = balance + $1 WHERE id = $2', [order.price, order.user_id]);
-        const user = await q1('SELECT balance FROM users WHERE id = $1', [order.user_id]);
-        await exec(
-          'INSERT INTO transactions (user_id, type, amount, balance_after, description) VALUES ($1,$2,$3,$4,$5)',
-          [order.user_id, 'refund', order.price, user?.balance || 0, `Auto-refund: No SMS received for ${order.service}`]
-        );
-        console.log(`[REFUND] Order #${order.id} refunded $${order.price} to user #${order.user_id}`);
-      }
-    } catch (e) {
-      // silent
-    }
-  }, 30000); // check every 30s
 }
 
 // ══════════════════════════════════════════════════
@@ -238,15 +216,25 @@ module.exports = {
   orders: {
     async create(order) {
       const r = await execReturning(
-        'INSERT INTO orders (user_id, activation_id, service, country, operator, phone, status, cost, price, profit, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        'INSERT INTO orders (user_id, activation_id, service, country, operator, phone, status, cost, price, profit, expires_at, country_name, service_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
         [order.user_id, order.activation_id, order.service, order.country, order.operator, order.phone,
-         order.status || 'pending', order.cost, order.price, order.profit, order.expires_at || null]
+         order.status || 'pending', order.cost, order.price, order.profit, order.expires_at || null,
+         order.country_name || null, order.service_name || null]
       );
       return r;
     },
     async updateStatus(id, status, smsText) {
-      await exec("UPDATE orders SET status = $1, sms_text = $2, updated_at = NOW() WHERE id = $3 OR activation_id = $3",
-        [status, smsText || null, id]);
+      await exec("UPDATE orders SET status = $1, sms_text = COALESCE($2, sms_text), updated_at = NOW() WHERE activation_id = $3",
+        [status, smsText || null, String(id)]);
+    },
+    async setCode(id, code, smsText) {
+      await exec('UPDATE orders SET last_code = $1, sms_text = COALESCE($2, sms_text), updated_at = NOW() WHERE id = $3', [code, smsText || null, id]);
+    },
+    async getById(id) { return q1('SELECT * FROM orders WHERE id = $1', [id]); },
+    async getByActivationId(aid) { return q1('SELECT * FROM orders WHERE activation_id = $1', [String(aid)]); },
+    async getPending() { return qAll("SELECT * FROM orders WHERE status IN ('pending','active') ORDER BY created_at ASC"); },
+    async setStatusById(id, status) {
+      await exec('UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2', [status, id]);
     },
     async getByUser(userId, limit = 50, offset = 0) {
       return qAll('SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [userId, limit, offset]);

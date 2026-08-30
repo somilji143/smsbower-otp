@@ -11,6 +11,7 @@ const SSEClient = {
   callbacks: {
     onNewSms: [],
     onStatusChange: [],
+    onActivation: [],
     onConnect: [],
     onDisconnect: [],
   },
@@ -71,6 +72,15 @@ const SSEClient = {
         }
       });
 
+      this.eventSource.addEventListener('activation', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          this.callbacks.onActivation.forEach(cb => cb(data));
+        } catch (err) {
+          console.warn('[SSE] Parse error:', err);
+        }
+      });
+
       this.eventSource.onerror = () => {
         console.warn('[SSE] Connection lost, reconnecting...');
         this.isConnected = false;
@@ -101,6 +111,7 @@ const SSEClient = {
   // ── Callback registration ──
   onNewSms(callback) { this.callbacks.onNewSms.push(callback); },
   onStatusChange(callback) { this.callbacks.onStatusChange.push(callback); },
+  onActivation(callback) { this.callbacks.onActivation.push(callback); },
   onConnect(callback) { this.callbacks.onConnect.push(callback); },
   onDisconnect(callback) { this.callbacks.onDisconnect.push(callback); },
 

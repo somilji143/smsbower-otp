@@ -22,9 +22,13 @@ app.use('/auth', authRouter);
 app.use('/', webhookRouter);
 app.use('/partner', partnerRouter);
 app.use('/api', apiRouter);
-app.use('/admin', adminRouter);
+app.use('/admin/api', adminRouter);
 
 app.get('*', (req, res) => {
+  // Don't override actual static files (e.g. admin.html)
+  if (req.path.includes('.')) {
+    return res.status(404).end();
+  }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -34,6 +38,8 @@ app.use((err, req, res, next) => {
 });
 
 db.waitForReady().then(() => {
+  const { globalEmitter } = require('./routes/webhook');
+  require('./workers/activations').start(globalEmitter);
   app.listen(PORT, () => {
     console.log('');
     console.log('  ⚡ SMSMaster Platform');
