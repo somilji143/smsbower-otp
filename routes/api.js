@@ -4,18 +4,13 @@ const db = require('../database/db');
 const { auth } = require('../middleware/auth');
 const provider = require('./provider');
 const { isoForCountry } = require('../data/countries');
+const { iconUrl } = require('../data/service-icons');
 const worker = require('../workers/activations');
 const { globalEmitter } = require('./webhook');
 
-// Sell price = provider cost + admin profit margin, rounded up to the cent
 async function sellPrice(cost) {
   const pct = parseFloat(await db.settings.get('profit_percentage') || '30');
   return Math.ceil(cost * (1 + pct / 100) * 100) / 100;
-}
-
-function serviceLogo(code) {
-  // SmsBower's own icon set, keyed by service code (frontend falls back to a letter avatar on 404)
-  return `https://smsbower.app/img/svg/services/${encodeURIComponent(code)}.svg`;
 }
 
 /* ══════════ PUBLIC CATALOG (real data from SmsBower) ══════════ */
@@ -24,7 +19,7 @@ function serviceLogo(code) {
 router.get('/catalog/services', async (req, res) => {
   try {
     const services = await provider.getServices();
-    res.json(services.map(s => ({ ...s, logo: serviceLogo(s.code) })));
+    res.json(services.map(s => ({ ...s, logo: iconUrl(s.code) })));
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 

@@ -156,17 +156,26 @@ const App = {
     return `hsl(${h},55%,45%)`;
   },
 
+  simpleIconSlug(name) {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/messenger$/, '');
+  },
+
   renderServices() {
     const grid = document.getElementById('serviceGrid');
     const q = this.state.serviceFilter.toLowerCase();
     const list = q ? this.services.filter(s => s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)) : this.services;
     if (!list.length) { grid.innerHTML = '<div class="empty-hint">No services match your search</div>'; return; }
-    grid.innerHTML = list.map(s => `
+    grid.innerHTML = list.map(s => {
+      const fallbackSlug = this.simpleIconSlug(s.name);
+      const fallbackUrl = `https://cdn.simpleicons.org/${fallbackSlug}`;
+      const avatarHtml = `<div class=&quot;service-avatar&quot; style=&quot;background:${this.avatarColor(s.code)}&quot;>${esc(s.name.charAt(0).toUpperCase())}</div>`;
+      return `
       <div class="service-cell ${this.state.service === s.code ? 'selected' : ''}" onclick="App.selectService('${esc(s.code)}')" title="${esc(s.name)}">
         <img src="${esc(s.logo)}" alt="" loading="lazy"
-             onerror="this.outerHTML='<div class=&quot;service-avatar&quot; style=&quot;background:${this.avatarColor(s.code)}&quot;>${esc(s.name.charAt(0).toUpperCase())}</div>'">
+             onerror="if(!this.dataset.retry){this.dataset.retry='1';this.src='${esc(fallbackUrl)}';}else{this.outerHTML='${avatarHtml}';}">
         <span class="svc-name">${esc(s.name)}</span>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   },
   filterServices(v) { this.state.serviceFilter = v; this.renderServices(); },
 
@@ -330,7 +339,7 @@ const App = {
       const isRefunded = a.status === 'refunded';
       return `
       <div class="act-card ${isDone ? 'completed' : ''}">
-        <img class="act-logo" src="${esc(logo)}" alt="" onerror="this.outerHTML='<div class=&quot;service-avatar act-logo&quot; style=&quot;background:${this.avatarColor(a.service || '?')}&quot;>${esc((a.service_name || a.service || '?').charAt(0).toUpperCase())}</div>'">
+        <img class="act-logo" src="${esc(logo)}" alt="" onerror="if(!this.dataset.retry){this.dataset.retry='1';this.src='https://cdn.simpleicons.org/${this.simpleIconSlug(a.service_name || a.service || '')}';}else{this.outerHTML='<div class=&quot;service-avatar act-logo&quot; style=&quot;background:${this.avatarColor(a.service || '?')}&quot;>${esc((a.service_name || a.service || '?').charAt(0).toUpperCase())}</div>';}">
         <div class="act-mid">
           <div class="act-phone">+${esc(a.phone)} <button class="copy-btn" onclick="App.copy('+${esc(a.phone)}')">COPY</button></div>
           <div class="act-sub">
