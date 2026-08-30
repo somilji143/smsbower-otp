@@ -815,7 +815,7 @@
             
             // Event Listeners for Forms
             document.getElementById('saveProfitBtn').addEventListener('click', () => {
-                saveSetting('profitPercentage', document.getElementById('profitPercentage').value);
+                saveSetting('profit_percentage', document.getElementById('profitPercentage').value);
             });
             
             document.getElementById('testSmsForm').addEventListener('submit', (e) => {
@@ -1046,7 +1046,7 @@
             try {
                 // Load settings for profit
                 const settings = await apiFetch('settings');
-                document.getElementById('profitPercentage').value = settings.profitPercentage || 0;
+                document.getElementById('profitPercentage').value = settings.profit_percentage || 0;
 
                 // Load transactions
                 const data = await apiFetch('transactions');
@@ -1212,22 +1212,22 @@
             try {
                 const settings = await apiFetch('settings');
                 if(settings) {
-                    document.getElementById('setProfit').value = settings.profitPercentage || '';
-                    document.getElementById('setMinOrder').value = settings.minOrderAmount || '';
-                    document.getElementById('setSiteName').value = settings.siteName || '';
-                    document.getElementById('setSiteDesc').value = settings.siteDescription || '';
-                    document.getElementById('setMaintenance').checked = settings.maintenanceMode || false;
+                    document.getElementById('setProfit').value = settings.profit_percentage || '';
+                    document.getElementById('setMinOrder').value = settings.min_order_amount || '';
+                    document.getElementById('setSiteName').value = settings.site_name || '';
+                    document.getElementById('setSiteDesc').value = settings.site_description || '';
+                    document.getElementById('setMaintenance').checked = settings.maintenance_mode === '1';
                 }
             } catch (e) { }
         }
 
         async function saveAllSettings() {
             const settings = {
-                profitPercentage: parseFloat(document.getElementById('setProfit').value) || 0,
-                minOrderAmount: parseFloat(document.getElementById('setMinOrder').value) || 0,
-                siteName: document.getElementById('setSiteName').value,
-                siteDescription: document.getElementById('setSiteDesc').value,
-                maintenanceMode: document.getElementById('setMaintenance').checked
+                profit_percentage: parseFloat(document.getElementById('setProfit').value) || 0,
+                min_order_amount: parseFloat(document.getElementById('setMinOrder').value) || 0,
+                site_name: document.getElementById('setSiteName').value,
+                site_description: document.getElementById('setSiteDesc').value,
+                maintenance_mode: document.getElementById('setMaintenance').checked ? '1' : '0'
             };
 
             try {
