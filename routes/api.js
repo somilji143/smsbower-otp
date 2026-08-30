@@ -10,7 +10,10 @@ const { globalEmitter } = require('./webhook');
 
 async function sellPrice(cost) {
   const pct = parseFloat(await db.settings.get('profit_percentage') || '30');
-  return Math.ceil(cost * (1 + pct / 100) * 100) / 100;
+  const minPrice = parseFloat(await db.settings.get('min_order_amount') || '0.05');
+  const raw = cost * (1 + pct / 100);
+  // Round up to nearest cent, enforce minimum price
+  return Math.max(minPrice, Math.ceil(raw * 100) / 100);
 }
 
 /* ══════════ PUBLIC CATALOG (real data from SmsBower) ══════════ */
@@ -43,7 +46,8 @@ router.get('/catalog/offers', async (req, res) => {
     ]);
     const nameById = Object.fromEntries(countries.map(c => [c.id, c.name]));
     const pct = parseFloat(await db.settings.get('profit_percentage') || '30');
-    const sell = c => Math.ceil(c * (1 + pct / 100) * 100) / 100;
+    const minPrice = parseFloat(await db.settings.get('min_order_amount') || '0.05');
+    const sell = c => Math.max(minPrice, Math.ceil(c * (1 + pct / 100) * 100) / 100);
 
     const rows = offers.map(o => {
       const name = nameById[o.country] || o.country;
@@ -114,7 +118,7 @@ router.post('/buy-number', auth, async (req, res) => {
 
     const user = await db.users.findById(req.user.id);
     if (user.balance < maxPrice) {
-      return res.status(400).json({ error: `Insufficient balance — this number costs up to $${maxPrice.toFixed(2)}` });
+      return res.status(400).json({ error: `Insufficient balance — this number costs up to $${maxPrice.toFixed(4)}` });
     }
 
     // Real purchase

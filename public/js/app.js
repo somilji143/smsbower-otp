@@ -4,6 +4,15 @@
    real purchases, live OTP delivery, rank tiers, auto-refund.
    ============================================================ */
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const fmtPrice = v => {
+  const n = +v || 0;
+  const d = n < 0.01 ? 4 : n < 1 ? 3 : 2;
+  let s = n.toFixed(d);
+  // trim trailing zeros but always keep 2 decimals ($0.120 → $0.12)
+  if (d > 2) s = s.replace(/0+$/, '').padEnd(s.indexOf('.') + 3, '0');
+  return s;
+};
+const icon = (name, size = 14) => `<svg width="${size}" height="${size}"><use href="#i-${name}"/></svg>`;
 
 const App = {
   token: localStorage.getItem('token'),
@@ -33,13 +42,13 @@ const App = {
   updateAuthUI() {
     const loggedIn = this.isLoggedIn();
     const show = (id, on, disp = 'inline-flex') => { const el = document.getElementById(id); if (el) el.style.display = on ? disp : 'none'; };
-    show('userBalance', loggedIn, 'inline-block');
+    show('userBalance', loggedIn);
     show('addFundsBtn', loggedIn);
     show('loginBtn', !loggedIn);
     show('logoutBtn', loggedIn);
     show('adminLink', loggedIn && this.user?.role === 'admin');
-    const bal = document.getElementById('userBalance');
-    if (loggedIn && bal) bal.textContent = `Balance: $${(+this.user?.balance || 0).toFixed(2)}`;
+    const bal = document.querySelector('#userBalance span');
+    if (loggedIn && bal) bal.textContent = `$${fmtPrice(this.user?.balance)}`;
   },
 
   setBalance(balance) {
@@ -116,8 +125,8 @@ const App = {
       if (!act) return;
       act.status = a.status;
       if (a.code) act.last_code = a.code;
-      if (a.status === 'completed' && a.code) this.showToast(`✅ Code received: ${a.code}`, 'success');
-      if (a.status === 'refunded') { this.showToast('💸 Number refunded to your balance', 'warning'); this.refreshBalance(); }
+      if (a.status === 'completed' && a.code) this.showToast(`Code received: ${a.code}`, 'success');
+      if (a.status === 'refunded') { this.showToast('Number refunded to your balance', 'warning'); this.refreshBalance(); }
       this.renderActivations();
     });
   },
@@ -127,16 +136,18 @@ const App = {
   },
 
   showToast(msg, type = 'info') {
+    const icons = { success: 'check', error: 'x', warning: 'info', info: 'info' };
     const c = document.getElementById('toastContainer');
     const t = document.createElement('div');
     t.className = `toast toast-${type}`;
-    t.textContent = msg;
+    t.innerHTML = `${icon(icons[type] || 'info', 15)}<span></span>`;
+    t.querySelector('span').textContent = msg;
     c.appendChild(t);
     setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4000);
   },
 
   addFunds() {
-    this.showToast('💳 To add funds, contact support / the site admin', 'info');
+    this.showToast('To add funds, contact support / the site admin', 'info');
   },
 
   /* ══════════ SERVICES (real, all of them) ══════════ */
@@ -145,9 +156,11 @@ const App = {
     try {
       this.services = await fetch('/api/catalog/services').then(r => { if (!r.ok) throw new Error('catalog'); return r.json(); });
       document.getElementById('serviceCount').textContent = `${this.services.length} services`;
+      const stat = document.getElementById('statServices');
+      if (stat && this.services.length) stat.textContent = `${this.services.length}`;
       this.renderServices();
     } catch (e) {
-      grid.innerHTML = `<div class="empty-hint">⚠️ Could not load services from provider.<br>Check SMSBOWER_API_KEY on the server.</div>`;
+      grid.innerHTML = `<div class="empty-hint">Could not load services from provider.<br>Check SMSBOWER_API_KEY on the server.</div>`;
     }
   },
 
@@ -183,9 +196,9 @@ const App = {
     this.state.service = code;
     this.renderServices();
     const svc = this.services.find(s => s.code === code);
-    document.getElementById('selectedServiceLabel').textContent = svc ? `✓ ${svc.name}` : '';
+    document.getElementById('selectedServiceLabel').innerHTML = svc ? `${icon('check', 13)} ${esc(svc.name)} selected` : '';
     const list = document.getElementById('countryList');
-    list.innerHTML = '<div class="loading-block"><div class="spinner"></div><p>Loading live prices…</p></div>';
+    list.innerHTML = '<div class="sk-row"></div>'.repeat(6);
     document.getElementById('countryCount').textContent = '';
     try {
       this.offers = await fetch(`/api/catalog/offers?service=${encodeURIComponent(code)}`).then(async r => {
@@ -195,7 +208,7 @@ const App = {
       });
       this.renderCountries();
     } catch (e) {
-      list.innerHTML = `<div class="empty-hint">⚠️ ${esc(e.message)}</div>`;
+      list.innerHTML = `<div class="empty-hint">${esc(e.message)}</div>`;
     }
   },
 
@@ -213,7 +226,7 @@ const App = {
 
   renderCountries() {
     const list = document.getElementById('countryList');
-    if (!this.state.service) { list.innerHTML = '<div class="empty-hint">👆 Pick a service first to see live prices &amp; stock</div>'; return; }
+    if (!this.state.service) { list.innerHTML = '<div class="empty-hint">Pick a service first to see live prices &amp; stock</div>'; return; }
     const q = this.state.countryFilter.toLowerCase();
     const rank = this.state.rank;
 
@@ -249,7 +262,7 @@ const App = {
           <div class="country-name">${esc(r.name)}</div>
           <div class="country-stock">${Number(r.count).toLocaleString()} available</div>
         </div>
-        <button class="btn-buy" onclick="App.buyNumber('${esc(r.country)}', ${r.price})">$${r.price.toFixed(2)}</button>
+        <button class="btn-buy" onclick="App.buyNumber('${esc(r.country)}', ${r.price})">$${fmtPrice(r.price)}</button>
       </div>`).join('');
   },
   filterCountries(v) { this.state.countryFilter = v; this.renderCountries(); },
@@ -258,9 +271,9 @@ const App = {
   async buyNumber(country, shownPrice) {
     if (!this.requireAuth()) return;
     if (!this.state.service) { this.showToast('Select a service first', 'warning'); return; }
-    if ((+this.user?.balance || 0) < shownPrice) { this.showToast(`Insufficient balance — number costs $${shownPrice.toFixed(2)}. Use "Add funds".`, 'error'); return; }
+    if ((+this.user?.balance || 0) < shownPrice) { this.showToast(`Insufficient balance — number costs $${fmtPrice(shownPrice)}. Use "Add funds".`, 'error'); return; }
 
-    this.showToast('⏳ Requesting a number…');
+    this.showToast('Requesting a number…');
     try {
       const rank = this.state.rank !== 'all' ? this.state.rank : undefined;
       const result = await this.api('/api/buy-number', { method: 'POST', body: JSON.stringify({ service: this.state.service, country, rank }) });
@@ -272,7 +285,7 @@ const App = {
         price: result.price, status: 'pending', last_code: null,
         expires_at: result.expiresAt,
       });
-      this.showToast(`✅ Number ready: +${result.phone} ($${result.price.toFixed(2)})`, 'success');
+      this.showToast(`Number ready: +${result.phone} ($${fmtPrice(result.price)})`, 'success');
       document.getElementById('activationsPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (e) { this.showToast(e.message, 'error'); }
   },
@@ -302,8 +315,8 @@ const App = {
         const hadCode = !!act.last_code;
         act.status = o.status;
         act.last_code = o.last_code;
-        if (o.last_code && !hadCode) this.showToast(`✅ Code received: ${o.last_code}`, 'success');
-        if (o.status === 'refunded') { this.showToast('💸 Refunded — no SMS received', 'warning'); this.refreshBalance(); this.stopPolling(orderId); }
+        if (o.last_code && !hadCode) this.showToast(`Code received: ${o.last_code}`, 'success');
+        if (o.status === 'refunded') { this.showToast('Refunded — no SMS received', 'warning'); this.refreshBalance(); this.stopPolling(orderId); }
         this.renderActivations();
       } catch {}
     }, 4000);
@@ -317,7 +330,7 @@ const App = {
       const left = Math.max(0, Math.floor((new Date(act.expires_at) - Date.now()) / 1000));
       const m = Math.floor(left / 60), s = left % 60;
       el.textContent = `${m}:${String(s).padStart(2, '0')}`;
-      el.classList.toggle('danger', left < 120);
+      (el.closest('.act-timer') || el).classList.toggle('danger', left < 120);
       const cancelBtn = document.getElementById(`cancel-${act.id}`);
       if (cancelBtn) {
         const age = (Date.now() - new Date(act.created_at || Date.now() - 1)) / 1000;
@@ -331,7 +344,15 @@ const App = {
   renderActivations() {
     const el = document.getElementById('activationsList');
     const visible = this.activations.filter(a => !['finished'].includes(a.status));
-    if (!visible.length) { el.innerHTML = '<div class="empty-hint big">🔢 No active numbers yet — buy one on the left</div>'; return; }
+    if (!visible.length) {
+      el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">${icon('sim', 26)}</div>
+        <h4>No active numbers yet</h4>
+        <p>Choose a service on the left — your number and incoming SMS will show up here in real time.</p>
+      </div>`;
+      return;
+    }
     el.innerHTML = visible.map(a => {
       const svc = this.services.find(s => s.code === a.service);
       const logo = svc?.logo || '';
@@ -341,26 +362,26 @@ const App = {
       <div class="act-card ${isDone ? 'completed' : ''}">
         <img class="act-logo" src="${esc(logo)}" alt="" onerror="if(!this.dataset.retry){this.dataset.retry='1';this.src='https://cdn.simpleicons.org/${this.simpleIconSlug(a.service_name || a.service || '')}';}else{this.outerHTML='<div class=&quot;service-avatar act-logo&quot; style=&quot;background:${this.avatarColor(a.service || '?')}&quot;>${esc((a.service_name || a.service || '?').charAt(0).toUpperCase())}</div>';}">
         <div class="act-mid">
-          <div class="act-phone">+${esc(a.phone)} <button class="copy-btn" onclick="App.copy('+${esc(a.phone)}')">COPY</button></div>
+          <div class="act-phone">+${esc(a.phone)} <button class="copy-btn" onclick="App.copy('+${esc(a.phone)}')">${icon('copy', 11)} COPY</button></div>
           <div class="act-sub">
             ${esc(a.service_name || a.service)} · ${esc(a.country_name || a.country)}
-            · $${(+a.price || 0).toFixed(2)}
-            ${!isRefunded ? `· ⏳ <span class="act-timer" id="timer-${a.id}">--:--</span>` : ''}
+            · $${fmtPrice(a.price)}
+            ${!isRefunded ? `· <span class="act-timer">${icon('clock', 12)}<span id="timer-${a.id}">--:--</span></span>` : ''}
           </div>
         </div>
         <div class="act-code-zone">
           ${isRefunded
-            ? '<span class="badge badge-info">💸 Refunded</span>'
+            ? '<span class="badge badge-info">Refunded</span>'
             : a.last_code
               ? `<div class="act-code" onclick="App.copy('${esc(a.last_code)}')" title="Click to copy">${esc(a.last_code)}</div>`
               : '<div class="act-waiting"><div class="spinner"></div> Waiting for SMS…</div>'}
           ${!isRefunded ? `
           <div class="act-actions">
             ${a.last_code ? `
-              <button class="btn btn-outline btn-sm" onclick="App.retryOrder(${a.id})" title="Request another SMS on this number (free)">↻ Another SMS</button>
-              <button class="btn btn-primary btn-sm" onclick="App.finishOrder(${a.id})">✓ Done</button>
+              <button class="btn btn-outline btn-sm" onclick="App.retryOrder(${a.id})" title="Request another SMS on this number (free)">${icon('refresh', 13)} Another SMS</button>
+              <button class="btn btn-primary btn-sm" onclick="App.finishOrder(${a.id})">${icon('check', 13)} Done</button>
             ` : `
-              <button class="btn-danger-ghost" id="cancel-${a.id}" onclick="App.cancelOrder(${a.id})">✕ Cancel</button>
+              <button class="btn-danger-ghost" id="cancel-${a.id}" onclick="App.cancelOrder(${a.id})">Cancel</button>
             `}
           </div>` : ''}
         </div>
@@ -377,7 +398,7 @@ const App = {
       this.setBalance(r.balance);
       this.stopPolling(id);
       this.renderActivations();
-      this.showToast('💸 Cancelled — money refunded', 'success');
+      this.showToast('Cancelled — money refunded', 'success');
     } catch (e) { this.showToast(e.message, 'error'); }
   },
 
@@ -388,7 +409,7 @@ const App = {
       if (act) { act.status = 'pending'; act.last_code = null; }
       this.startPolling(id);
       this.renderActivations();
-      this.showToast('↻ Waiting for the next SMS…');
+      this.showToast('Waiting for the next SMS…');
     } catch (e) { this.showToast(e.message, 'error'); }
   },
 
@@ -398,17 +419,17 @@ const App = {
       this.activations = this.activations.filter(a => a.id !== id);
       this.stopPolling(id);
       this.renderActivations();
-      this.showToast('✓ Activation completed', 'success');
+      this.showToast('Activation completed', 'success');
     } catch (e) { this.showToast(e.message, 'error'); }
   },
 
-  copy(text) { navigator.clipboard.writeText(text); this.showToast(`📋 Copied: ${text}`, 'success'); },
+  copy(text) { navigator.clipboard.writeText(text); this.showToast(`Copied: ${text}`, 'success'); },
 
   /* ══════════ DASHBOARD ══════════ */
   async loadDashboard() {
     try {
       const s = await this.api('/api/dashboard');
-      document.getElementById('dashBalance').textContent = `$${(+s.balance || 0).toFixed(2)}`;
+      document.getElementById('dashBalance').textContent = `$${fmtPrice(s.balance)}`;
       document.getElementById('dashOrders').textContent = s.totalOrders || 0;
       document.getElementById('dashCompleted').textContent = s.completedOrders || 0;
       document.getElementById('dashSpent').textContent = `$${s.totalSpent || '0.00'}`;
@@ -417,7 +438,7 @@ const App = {
       el.innerHTML = orders.length ? orders.map(o => `
         <div class="sms-card">
           <div class="sms-header"><span class="sms-sender">${esc(o.service_name || o.service)} · ${esc(o.country_name || o.country || '-')}</span>${this.statusBadge(o.status)}</div>
-          <div class="sms-text" style="font-family:monospace">+${esc(o.phone)} · $${(+o.price || 0).toFixed(2)}${o.last_code ? ` · code: <b>${esc(o.last_code)}</b>` : ''}</div>
+          <div class="sms-text td-mono">+${esc(o.phone)} · $${fmtPrice(o.price)}${o.last_code ? ` · code: <b>${esc(o.last_code)}</b>` : ''}</div>
         </div>`).join('') : '<div class="empty-hint">No orders yet</div>';
     } catch (e) { console.error(e); }
   },
@@ -434,7 +455,15 @@ const App = {
   },
   renderSmsList(list) {
     const c = document.getElementById('smsInboxContainer');
-    if (!list.length) { c.innerHTML = '<div class="empty-hint big">💬 No SMS yet — they appear here in real time</div>'; return; }
+    if (!list.length) {
+      c.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">${icon('inbox', 26)}</div>
+        <h4>No SMS yet</h4>
+        <p>Messages arrive here in real time as soon as your numbers receive them.</p>
+      </div>`;
+      return;
+    }
     c.innerHTML = list.map(m => {
       const text = esc(m.text).replace(/\b(\d{4,8})\b/g, '<span class="sms-otp-highlight" onclick="App.copy(\'$1\')">$1</span>');
       const time = m.timestamp || m.created_at;
@@ -455,9 +484,9 @@ const App = {
         <td>${o.created_at ? new Date(o.created_at).toLocaleString() : '-'}</td>
         <td>${esc(o.service_name || o.service)}</td>
         <td>${esc(o.country_name || o.country || '-')}</td>
-        <td style="font-family:monospace">+${esc(o.phone || '-')}</td>
+        <td class="td-mono">+${esc(o.phone || '-')}</td>
         <td>${o.last_code ? `<span class="sms-otp-highlight" onclick="App.copy('${esc(o.last_code)}')">${esc(o.last_code)}</span>` : '—'}</td>
-        <td>$${(+o.price || 0).toFixed(2)}</td>
+        <td class="td-mono">$${fmtPrice(o.price)}</td>
         <td>${this.statusBadge(o.status)}</td>
       </tr>`).join('');
     } catch (e) { tbody.innerHTML = `<tr><td colspan="7">${esc(e.message)}</td></tr>`; }
@@ -468,10 +497,10 @@ const App = {
   },
 
   statusBadge(s) {
-    if (s === 'completed' || s === 'finished') return '<span class="badge badge-success">✅ Completed</span>';
-    if (s === 'refunded') return '<span class="badge badge-info">💸 Refunded</span>';
-    if (s === 'canceled') return '<span class="badge badge-canceled">✕ Canceled</span>';
-    return '<span class="badge badge-waiting">⏳ Pending</span>';
+    if (s === 'completed' || s === 'finished') return '<span class="badge badge-success">Completed</span>';
+    if (s === 'refunded') return '<span class="badge badge-info">Refunded</span>';
+    if (s === 'canceled') return '<span class="badge badge-canceled">Canceled</span>';
+    return '<span class="badge badge-waiting">Pending</span>';
   },
 };
 
