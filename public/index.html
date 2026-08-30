@@ -112,6 +112,13 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input type="text" id="countrySearch" placeholder="Find country…" oninput="App.filterCountries(this.value)" autocomplete="off">
             </div>
+            <div class="sort-row" id="sortTabs">
+              <span class="sort-label">Sort:</span>
+              <button class="sort-btn active" data-sort="popular" onclick="App.setSort('popular')">Popular</button>
+              <button class="sort-btn" data-sort="price-asc" onclick="App.setSort('price-asc')">Price ↑</button>
+              <button class="sort-btn" data-sort="price-desc" onclick="App.setSort('price-desc')">Price ↓</button>
+              <button class="sort-btn" data-sort="name" onclick="App.setSort('name')">A–Z</button>
+            </div>
             <div class="country-scroll" id="countryList">
               <div class="empty-hint">👆 Pick a service first to see live prices &amp; stock</div>
             </div>

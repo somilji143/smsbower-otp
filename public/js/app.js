@@ -12,7 +12,7 @@ const App = {
   services: [],        // [{code, name, logo}]
   offers: [],          // per-country offers for the selected service
   activations: [],     // live purchased numbers
-  state: { service: null, rank: 'all', serviceFilter: '', countryFilter: '' },
+  state: { service: null, rank: 'all', sort: 'popular', serviceFilter: '', countryFilter: '' },
   _pollTimers: {},
 
   // ── Init ──
@@ -196,6 +196,12 @@ const App = {
     if (this.state.service) this.renderCountries();
   },
 
+  setSort(sort) {
+    this.state.sort = sort;
+    document.querySelectorAll('#sortTabs .sort-btn').forEach(t => t.classList.toggle('active', t.dataset.sort === sort));
+    this.renderCountries();
+  },
+
   renderCountries() {
     const list = document.getElementById('countryList');
     if (!this.state.service) { list.innerHTML = '<div class="empty-hint">👆 Pick a service first to see live prices &amp; stock</div>'; return; }
@@ -213,6 +219,15 @@ const App = {
     }).filter(Boolean);
 
     if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q));
+
+    const sortFns = {
+      popular: (a, b) => b.count - a.count,
+      'price-asc': (a, b) => a.price - b.price,
+      'price-desc': (a, b) => b.price - a.price,
+      name: (a, b) => a.name.localeCompare(b.name),
+    };
+    rows.sort(sortFns[this.state.sort] || sortFns.popular);
+
     document.getElementById('countryCount').textContent = `${rows.length} countries`;
     if (!rows.length) { list.innerHTML = '<div class="empty-hint">No stock for this selection — try another rank or service</div>'; return; }
 
