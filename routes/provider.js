@@ -178,7 +178,9 @@ async function getCountryOffers(service) {
       tiers[t].count += p.count;
       if (p.providerId) tiers[t].providerIds.push(p.providerId);
     });
-    const cost = base?.cost ?? providers.reduce((m, p) => Math.min(m, p.price), Infinity);
+    const baseCost = base?.cost ?? Infinity;
+    const v3Min = providers.length ? providers.reduce((m, p) => Math.min(m, p.price), Infinity) : Infinity;
+    const cost = Math.min(baseCost, v3Min);
     const count = base?.count ?? providers.reduce((s, p) => s + p.count, 0);
     if (!isFinite(cost) || cost <= 0) continue;
     offers.push({ country: id, cost, count, tiers });

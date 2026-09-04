@@ -15,10 +15,10 @@ async function convertCost(rubAmount) {
 
 async function sellPrice(costUsd) {
   const pct = parseFloat(await db.settings.get('profit_percentage') || '30');
-  const minPrice = parseFloat(await db.settings.get('min_order_amount') || '0.05');
+  const minPrice = parseFloat(await db.settings.get('min_order_amount') || '0.01');
   const raw = costUsd * (1 + pct / 100);
-  // Round up to nearest cent, enforce minimum price
-  return Math.max(minPrice, Math.ceil(raw * 100) / 100);
+  // Round to nearest cent, enforce minimum price
+  return Math.max(minPrice, Math.round(raw * 100) / 100);
 }
 
 /* ══════════ PUBLIC CATALOG (real data from SmsBower) ══════════ */
@@ -51,9 +51,9 @@ router.get('/catalog/offers', async (req, res) => {
     ]);
     const nameById = Object.fromEntries(countries.map(c => [c.id, c.name]));
     const pct = parseFloat(await db.settings.get('profit_percentage') || '30');
-    const minPrice = parseFloat(await db.settings.get('min_order_amount') || '0.05');
+    const minPrice = parseFloat(await db.settings.get('min_order_amount') || '0.01');
     const rate = parseFloat(await db.settings.get('rub_to_usd_rate') || '90');
-    const sell = c => Math.max(minPrice, Math.ceil((c / rate) * (1 + pct / 100) * 100) / 100);
+    const sell = c => Math.max(minPrice, Math.round((c / rate) * (1 + pct / 100) * 100) / 100);
 
     const rows = offers.map(o => {
       const name = nameById[o.country] || o.country;

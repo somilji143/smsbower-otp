@@ -109,7 +109,7 @@ const readyCallbacks = [];
     // Default settings
     const defaults = {
       profit_percentage: '30',
-      min_order_amount: '0.05',
+      min_order_amount: '0.01',
       rub_to_usd_rate: '90',
       site_name: 'SMSMaster',
       site_description: 'Virtual Numbers for SMS Verification',
