@@ -123,6 +123,7 @@ router.post('/buy-number', auth, async (req, res) => {
     // Real purchase
     const bought = await provider.buyNumber({ service, country, maxPrice: maxCost, providerIds });
     const actualCost = parseFloat(bought.activationCost || baseCost) || baseCost;
+    provider.updateRealPrice(service, String(country), actualCost); // cache real cost for catalog
     const price = await sellPrice(actualCost);
     const profit = +(price - actualCost).toFixed(4);
 

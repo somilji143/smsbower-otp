@@ -158,6 +158,19 @@ function tierOf(index, total) {
   return 'bronze';
 }
 
+/* ── Real-price cache: stores actual activationCost from purchases.
+   getPrices API returns inflated estimates; this cache overrides them
+   with real costs so the catalog shows accurate prices. ── */
+const realPriceCache = new Map(); // key: "service:country" → cost (USD)
+
+function updateRealPrice(service, country, actualCost) {
+  if (actualCost > 0) realPriceCache.set(`${service}:${country}`, actualCost);
+}
+
+function getRealPrice(service, country) {
+  return realPriceCache.get(`${service}:${country}`);
+}
+
 /* Merge base prices + provider tiers into per-country rows the UI can render.
    Returns [{country, cost, count, tiers: {gold:{cost,count,providerIds}, ...}}] */
 async function getCountryOffers(service) {
@@ -178,9 +191,11 @@ async function getCountryOffers(service) {
       tiers[t].count += p.count;
       if (p.providerId) tiers[t].providerIds.push(p.providerId);
     });
+    // Prefer real purchase cost > V3 min > getPrices estimate
+    const real = getRealPrice(service, id);
     const baseCost = base?.cost ?? Infinity;
     const v3Min = providers.length ? providers.reduce((m, p) => Math.min(m, p.price), Infinity) : Infinity;
-    const cost = Math.min(baseCost, v3Min);
+    const cost = real ?? Math.min(baseCost, v3Min);
     const count = base?.count ?? providers.reduce((s, p) => s + p.count, 0);
     if (!isFinite(cost) || cost <= 0) continue;
     offers.push({ country: id, cost, count, tiers });
@@ -242,5 +257,6 @@ module.exports = {
   buyNumber,
   getActivationStatus,
   setActivationStatus,
+  updateRealPrice,
   friendlyError,
 };

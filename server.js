@@ -37,9 +37,21 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-db.waitForReady().then(() => {
+db.waitForReady().then(async () => {
   const { globalEmitter } = require('./routes/webhook');
   require('./workers/activations').start(globalEmitter);
+
+  // Seed real-price cache from latest orders so catalog prices are accurate
+  const provider = require('./routes/provider');
+  try {
+    const { rows } = await db.pool.query(
+      `SELECT DISTINCT ON (service, country) service, country, cost
+       FROM orders WHERE cost > 0 ORDER BY service, country, created_at DESC`
+    );
+    rows.forEach(r => provider.updateRealPrice(r.service, String(r.country), parseFloat(r.cost)));
+    if (rows.length) console.log(`  💰 Price cache: seeded ${rows.length} real prices from order history`);
+  } catch (e) { console.warn('[Price cache] seed failed:', e.message); }
+
   app.listen(PORT, () => {
     console.log('');
     console.log('  ⚡ SMSMaster Platform');
