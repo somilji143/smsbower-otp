@@ -8,10 +8,7 @@ const { iconUrl } = require('../data/service-icons');
 const worker = require('../workers/activations');
 const { globalEmitter } = require('./webhook');
 
-async function convertCost(rubAmount) {
-  const rate = parseFloat(await db.settings.get('rub_to_usd_rate') || '90');
-  return rubAmount / rate;
-}
+// SmsBower API returns prices in USD — no conversion needed
 
 async function sellPrice(costUsd) {
   const pct = parseFloat(await db.settings.get('profit_percentage') || '30');
@@ -49,8 +46,7 @@ router.get('/catalog/offers', async (req, res) => {
     ]);
     const nameById = Object.fromEntries(countries.map(c => [c.id, c.name]));
     const pct = parseFloat(await db.settings.get('profit_percentage') || '30');
-    const rate = parseFloat(await db.settings.get('rub_to_usd_rate') || '90');
-    const sell = c => Math.round((c / rate) * (1 + pct / 100) * 10000) / 10000;
+    const sell = c => Math.round(c * (1 + pct / 100) * 10000) / 10000;
 
     const rows = offers.map(o => {
       const name = nameById[o.country] || o.country;
@@ -117,8 +113,7 @@ router.post('/buy-number', auth, async (req, res) => {
       providerIds = offer.tiers[rank].providerIds;
     }
     const maxCost = Math.ceil(baseCost * 1.2 * 100) / 100; // small headroom so the buy doesn't fail on price drift
-    const maxCostUsd = await convertCost(maxCost);
-    const maxPrice = await sellPrice(maxCostUsd);
+    const maxPrice = await sellPrice(maxCost);
 
     const user = await db.users.findById(req.user.id);
     if (user.balance < maxPrice) {
@@ -127,10 +122,9 @@ router.post('/buy-number', auth, async (req, res) => {
 
     // Real purchase
     const bought = await provider.buyNumber({ service, country, maxPrice: maxCost, providerIds });
-    const actualCostRub = parseFloat(bought.activationCost || baseCost) || baseCost;
-    const actualCostUsd = await convertCost(actualCostRub);
-    const price = await sellPrice(actualCostUsd);
-    const profit = +(price - actualCostUsd).toFixed(2);
+    const actualCost = parseFloat(bought.activationCost || baseCost) || baseCost;
+    const price = await sellPrice(actualCost);
+    const profit = +(price - actualCost).toFixed(4);
 
     await db.users.updateBalance(user.id, -price);
 
@@ -149,7 +143,7 @@ router.post('/buy-number', auth, async (req, res) => {
       service, country: String(country),
       operator: bought.activationOperator || rank || 'any',
       phone: String(bought.phoneNumber),
-      status: 'pending', cost: actualCostUsd, price, profit,
+      status: 'pending', cost: actualCost, price, profit,
       expires_at: expiresAt,
       country_name: countryName, service_name: serviceName,
     });
