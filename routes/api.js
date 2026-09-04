@@ -63,6 +63,14 @@ router.get('/catalog/offers', async (req, res) => {
 
 /* ══════════ SSE STREAM (sms + activation updates) ══════════ */
 router.get('/sms/stream', (req, res) => {
+  // SSE doesn't support headers — accept token as query param
+  const token = req.query.token;
+  if (token) {
+    try {
+      const { verifyToken } = require('../middleware/auth');
+      verifyToken(token); // throws if invalid
+    } catch { return res.status(401).json({ error: 'Invalid token' }); }
+  }
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -127,14 +135,15 @@ router.post('/buy-number', auth, async (req, res) => {
     const price = await sellPrice(actualCost);
     const profit = +(price - actualCost).toFixed(4);
 
-    await db.users.updateBalance(user.id, -price);
+    const balanceRow = await db.users.updateBalance(user.id, -price);
+    const newBalance = parseFloat(balanceRow.balance);
 
     const countries = await provider.getCountries().catch(() => []);
     const services = await provider.getServices().catch(() => []);
     const countryName = countries.find(c => c.id === String(country))?.name || String(country);
     const serviceName = services.find(s => s.code === service)?.name || service;
 
-    await db.transactions.create(user.id, 'purchase', -price, `${serviceName} — ${countryName} (+${bought.phoneNumber})`);
+    await db.transactions.create(user.id, 'purchase', -price, `${serviceName} — ${countryName} (+${bought.phoneNumber})`, newBalance);
 
     const lifetime = parseInt(await db.settings.get('refund_timeout') || '1200');
     const expiresAt = new Date(Date.now() + lifetime * 1000).toISOString();
@@ -149,10 +158,9 @@ router.post('/buy-number', auth, async (req, res) => {
       country_name: countryName, service_name: serviceName,
     });
 
-    const updatedUser = await db.users.findById(user.id);
     res.json({
       orderId: order.id, activationId: bought.activationId, phone: String(bought.phoneNumber),
-      price, balance: updatedUser.balance, expiresAt, expiresIn: lifetime,
+      price, balance: newBalance, expiresAt, expiresIn: lifetime,
       service, serviceName, country: String(country), countryName,
     });
   } catch (e) { res.status(400).json({ error: e.message }); }

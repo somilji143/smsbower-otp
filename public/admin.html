@@ -428,6 +428,11 @@
                 position: fixed;
                 bottom: 0;
                 z-index: 50;
+                transition: transform 0.3s ease;
+                transform: translateX(-100%);
+            }
+            .sidebar.open {
+                transform: translateX(0);
             }
             .sidebar-header { display: none; }
             .nav-menu { flex-direction: row; padding: 0; }
@@ -796,8 +801,18 @@
                 item.addEventListener('click', (e) => {
                     const page = item.getAttribute('data-page');
                     window.location.hash = page;
+                    // close mobile sidebar on nav click
+                    document.querySelector('.sidebar').classList.remove('open');
                 });
             });
+
+            // Mobile toggle
+            const mobileToggle = document.querySelector('.mobile-toggle');
+            if (mobileToggle) {
+                mobileToggle.addEventListener('click', () => {
+                    document.querySelector('.sidebar').classList.toggle('open');
+                });
+            }
 
             // Logout
             document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -837,33 +852,34 @@
         // Routing
         function handleHashChange() {
             const hash = window.location.hash.replace('#', '') || 'dashboard';
-            
-            // Update active state in nav
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.classList.remove('active');
-                if (item.getAttribute('data-page') === hash) {
-                    item.classList.add('active');
-                    document.getElementById('pageTitle').innerText = item.querySelector('span:nth-child(2)').innerText;
-                }
-            });
-
-            // Show page
-            document.querySelectorAll('.page').forEach(page => {
-                page.classList.remove('active');
-            });
-            const targetPage = document.getElementById(`page-${hash}`);
-            if (targetPage) {
-                targetPage.classList.add('active');
-                currentPage = hash;
-                loadDataForPage(hash);
-            }
+            showPage(hash);
         }
 
-        function loadDataForPage(page) {
-            switch(page) {
+        function showPage(pageId) {
+            // Update nav
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.getAttribute('data-page') === pageId);
+            });
+
+            // Update content
+            document.querySelectorAll('.page-content').forEach(page => {
+                page.classList.remove('active');
+            });
+            
+            const targetPage = document.getElementById(`page-${pageId}`);
+            if (targetPage) {
+                targetPage.classList.add('active');
+            }
+
+            currentPage = pageId;
+            loadData(pageId);
+        }
+
+        function loadData(pageId) {
+            switch(pageId) {
                 case 'dashboard': loadDashboard(); break;
                 case 'users': loadUsers(); break;
-                case 'finance': loadFinance(); break;
+                case 'transactions': loadTransactions(); break;
                 case 'orders': loadOrders(); break;
                 case 'sms': loadSms(); break;
                 case 'sims': loadSims(); break;
@@ -894,6 +910,11 @@
                     return null;
                 }
 
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server returned non-JSON response');
+                }
+
                 const data = await response.json();
                 
                 if (!response.ok) {
@@ -909,7 +930,16 @@
         }
 
         // Formatters
-        const formatMoney = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+        const formatMoney = (amount) => {
+            const val = parseFloat(amount) || 0;
+            const decimals = (val !== 0 && Math.abs(val) < 0.01) ? 4 : 2;
+            return new Intl.NumberFormat('en-US', { 
+                style: 'currency', 
+                currency: 'USD',
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            }).format(val);
+        };
         const formatDate = (dateString) => new Date(dateString).toLocaleString();
         
         function statusBadge(status) {

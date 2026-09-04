@@ -36,7 +36,7 @@ const readyCallbacks = [];
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       role TEXT DEFAULT 'user',
-      balance REAL DEFAULT 0,
+      balance NUMERIC(12,4) DEFAULT 0,
       status TEXT DEFAULT 'active',
       created_at TIMESTAMP DEFAULT NOW()
     )`);
@@ -61,7 +61,7 @@ const readyCallbacks = [];
       activation_id TEXT UNIQUE,
       phone TEXT, service TEXT, country TEXT, operator TEXT,
       status INTEGER DEFAULT 0,
-      sum REAL DEFAULT 0, call INTEGER DEFAULT 0, voice INTEGER DEFAULT 0,
+      sum NUMERIC(12,4) DEFAULT 0, call INTEGER DEFAULT 0, voice INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )`);
@@ -85,7 +85,7 @@ const readyCallbacks = [];
       user_id INTEGER, activation_id TEXT,
       service TEXT, country TEXT, operator TEXT,
       phone TEXT, status TEXT DEFAULT 'pending',
-      cost REAL DEFAULT 0, price REAL DEFAULT 0, profit REAL DEFAULT 0,
+      cost NUMERIC(12,4) DEFAULT 0, price NUMERIC(12,4) DEFAULT 0, profit NUMERIC(12,4) DEFAULT 0,
       sms_text TEXT,
       expires_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW(),
@@ -95,7 +95,7 @@ const readyCallbacks = [];
     await client.query(`CREATE TABLE IF NOT EXISTS transactions (
       id SERIAL PRIMARY KEY,
       user_id INTEGER, type TEXT,
-      amount REAL, balance_after REAL,
+      amount NUMERIC(12,4), balance_after NUMERIC(12,4),
       description TEXT,
       created_at TIMESTAMP DEFAULT NOW()
     )`);
@@ -103,6 +103,12 @@ const readyCallbacks = [];
     await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS last_code TEXT`);
     await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS country_name TEXT`);
     await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS service_name TEXT`);
+
+    // Indexes for performance
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders (user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_orders_activation_id ON orders (activation_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions (user_id)`);
 
     client.release();
 
@@ -179,8 +185,8 @@ module.exports = {
     async findById(id) { return q1('SELECT id, email, role, balance, status, created_at FROM users WHERE id = $1', [id]); },
     async getAll() { return qAll('SELECT id, email, role, balance, status, created_at FROM users ORDER BY created_at DESC'); },
     async updateBalance(id, amount) {
-      await exec('UPDATE users SET balance = balance + $1 WHERE id = $2', [amount, id]);
-      return q1('SELECT balance FROM users WHERE id = $1', [id]);
+      const row = await q1('UPDATE users SET balance = balance + $1 WHERE id = $2 RETURNING balance', [amount, id]);
+      return row;
     },
     async setBalance(id, balance) { await exec('UPDATE users SET balance = $1 WHERE id = $2', [balance, id]); },
     async setStatus(id, status) { await exec('UPDATE users SET status = $1 WHERE id = $2', [status, id]); },
@@ -192,17 +198,17 @@ module.exports = {
   settings: {
     async get(key) { const r = await q1('SELECT value FROM settings WHERE key = $1', [key]); return r ? r.value : null; },
     async set(key, value) {
-      const existing = await q1('SELECT key FROM settings WHERE key = $1', [key]);
-      if (existing) await exec('UPDATE settings SET value = $1 WHERE key = $2', [value, key]);
-      else await exec('INSERT INTO settings (key, value) VALUES ($1, $2)', [key, value]);
+      await exec('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [key, value]);
     },
     async getAll() { return qAll('SELECT * FROM settings'); },
   },
 
   transactions: {
-    async create(userId, type, amount, description) {
-      const user = await q1('SELECT balance FROM users WHERE id = $1', [userId]);
-      const balanceAfter = (user ? user.balance : 0) + amount;
+    async create(userId, type, amount, description, balanceAfter) {
+      if (balanceAfter === undefined) {
+        const user = await q1('SELECT balance FROM users WHERE id = $1', [userId]);
+        balanceAfter = (user ? parseFloat(user.balance) : 0);
+      }
       await exec('INSERT INTO transactions (user_id, type, amount, balance_after, description) VALUES ($1,$2,$3,$4,$5)',
         [userId, type, amount, balanceAfter, description]);
     },
@@ -237,6 +243,9 @@ module.exports = {
     async setStatusById(id, status) {
       await exec('UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2', [status, id]);
     },
+    async setStatusIfNot(id, newStatus, excludeStatus) {
+      return exec('UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 AND status != $3', [newStatus, id, excludeStatus]);
+    },
     async getByUser(userId, limit = 50, offset = 0) {
       return qAll('SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [userId, limit, offset]);
     },
@@ -250,11 +259,11 @@ module.exports = {
 
   simCards: {
     async upsert(sim) {
-      const existing = await q1('SELECT id FROM sim_cards WHERE phone = $1', [sim.phone]);
-      if (existing) await exec("UPDATE sim_cards SET iccid=$1, imsi=$2, mac=$3, status=$4, active=$5, updated_at=NOW() WHERE phone=$6",
-        [sim.iccid, sim.imsi, sim.mac, sim.status, sim.active, sim.phone]);
-      else await exec('INSERT INTO sim_cards (phone, iccid, imsi, mac, status, active) VALUES ($1,$2,$3,$4,$5,$6)',
-        [sim.phone, sim.iccid, sim.imsi, sim.mac, sim.status, sim.active]);
+      await exec(
+        `INSERT INTO sim_cards (phone, iccid, imsi, mac, status, active) VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (phone) DO UPDATE SET iccid=$2, imsi=$3, mac=$4, status=$5, active=$6, updated_at=NOW()`,
+        [sim.phone, sim.iccid, sim.imsi, sim.mac, sim.status, sim.active]
+      );
     },
     async getAll() { return qAll('SELECT * FROM sim_cards ORDER BY updated_at DESC'); },
     async getAvailable() { return q1('SELECT * FROM sim_cards WHERE active = 1 LIMIT 1'); },

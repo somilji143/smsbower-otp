@@ -29,14 +29,16 @@ function emit(order, extra = {}) {
 }
 
 async function refundOrder(order, reason) {
-  const fresh = await db.orders.getById(order.id);
-  if (!fresh || fresh.status === 'refunded') return;
+  // Atomic: only refund if not already refunded (prevents double-refund race)
+  const { rowCount } = await db.orders.setStatusIfNot(order.id, 'refunded', 'refunded');
+  if (rowCount === 0) return; // already refunded by another tick
 
-  await db.orders.setStatusById(order.id, 'refunded');
-  await db.users.updateBalance(order.user_id, order.price);
+  const updated = await db.users.updateBalance(order.user_id, order.price);
+  const balanceAfter = updated ? parseFloat(updated.balance) : undefined;
   await db.transactions.create(
     order.user_id, 'refund', order.price,
-    reason || `Refund: ${order.service_name || order.service}`
+    reason || `Refund: ${order.service_name || order.service}`,
+    balanceAfter
   );
   console.log(`[WORKER] Order #${order.id} refunded $${order.price}`);
   emit({ ...order, status: 'refunded' });
@@ -140,7 +142,11 @@ async function tick() {
 
 function start(globalEmitter) {
   emitter = globalEmitter;
-  setInterval(tick, POLL_INTERVAL);
+  async function loop() {
+    await tick();
+    setTimeout(loop, POLL_INTERVAL);
+  }
+  setTimeout(loop, POLL_INTERVAL);
   console.log('[WORKER] Activation sync started (polling every 8s)');
 }
 

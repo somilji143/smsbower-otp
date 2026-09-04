@@ -26,4 +26,8 @@ function adminOnly(req, res, next) {
   next();
 }
 
-module.exports = { auth, adminOnly, generateToken };
+function verifyToken(token) {
+  return jwt.verify(token, SECRET);
+}
+
+module.exports = { auth, adminOnly, generateToken, verifyToken };

@@ -92,6 +92,12 @@ const App = {
   async api(endpoint, options = {}) {
     const res = await fetch(endpoint, { ...options, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}`, ...(options.headers || {}) } });
     if (res.status === 401) { this.logout(); this.openAuth(); throw new Error('Session expired — sign in again'); }
+    
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('Server returned non-JSON response');
+    }
+    
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Request failed');
     return data;
@@ -157,7 +163,11 @@ const App = {
       this.services = await fetch('/api/catalog/services').then(r => { if (!r.ok) throw new Error('catalog'); return r.json(); });
       document.getElementById('serviceCount').textContent = `${this.services.length} services`;
       const stat = document.getElementById('statServices');
-      if (stat && this.services.length) stat.textContent = `${this.services.length}`;
+      if (stat && this.services.length) {
+        setTimeout(() => {
+          stat.textContent = this.services.length < 1000 ? this.services.length : (this.services.length + '+');
+        }, 500);
+      }
       this.renderServices();
     } catch (e) {
       grid.innerHTML = `<div class="empty-hint">Could not load services from provider.<br>Check SMSBOWER_API_KEY on the server.</div>`;
@@ -432,7 +442,7 @@ const App = {
       document.getElementById('dashBalance').textContent = `$${fmtPrice(s.balance)}`;
       document.getElementById('dashOrders').textContent = s.totalOrders || 0;
       document.getElementById('dashCompleted').textContent = s.completedOrders || 0;
-      document.getElementById('dashSpent').textContent = `$${s.totalSpent || '0.00'}`;
+      document.getElementById('dashSpent').textContent = `$${fmtPrice(s.totalSpent)}`;
       const orders = await this.api('/api/orders?limit=6');
       const el = document.getElementById('dashRecentOrders');
       el.innerHTML = orders.length ? orders.map(o => `

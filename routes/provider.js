@@ -25,7 +25,7 @@ async function callApi(params, { timeout = 20000 } = {}) {
       }
       const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
       const text = (await res.text()).trim();
-      if (!res.ok && !text) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 80)}`);
       return text;
     } catch (e) {
       lastErr = e;
